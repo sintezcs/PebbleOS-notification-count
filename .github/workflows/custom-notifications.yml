@@ -63,6 +63,8 @@ jobs:
           npm install --prefix build/sdk --no-audit --no-fund
           npm ci --prefix custom/watchface --no-audit --no-fund
           export NODE_PATH="$GITHUB_WORKSPACE/build/sdk/node_modules"
+          arm_bin_dir=$(python3 -c 'from pathlib import Path; cache=Path("build/CMakeCache.txt").read_text().splitlines(); compiler=next(line.split("=",1)[1] for line in cache if line.startswith("CMAKE_C_COMPILER:")); print(Path(compiler).parent)')
+          export PATH="$arm_bin_dir:$PATH"
           cd custom/watchface
           python3 ../../build/sdk/waf configure build
           python3 tools/strip_pbw.py build/watchface.pbw build/release.pbw
