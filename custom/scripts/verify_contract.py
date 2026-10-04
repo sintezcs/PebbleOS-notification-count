@@ -15,6 +15,19 @@ def functions(exports):
         if item['type']=='group':result.extend(functions(item['exports']))
         elif item['type']=='function':result.append(item)
     return result
+base_spec = json.loads(subprocess.check_output(
+    ['git','show',state['base_tag']+':tools/generate_native_sdk/exported_symbols.json'],
+    cwd=ROOT,text=True))
+assert int(spec['revision']) > int(base_spec['revision']), 'private revision must follow upstream'
+def ordered(exports):
+    return sorted(functions(exports), key=lambda x: (int(x.get('addedRevision', 0)), x.get('sortName', x['name'])))
+def abi_record(entry):
+    fields=('name','addedRevision','sortName','implName','removed','internal','appOnly','workerOnly','skipDefinition')
+    return {key:entry.get(key) for key in fields}
+base_functions=ordered(base_spec['exports'])
+custom_functions=ordered(spec['exports'])
+assert [abi_record(x) for x in custom_functions[:len(base_functions)]] == [abi_record(x) for x in base_functions], 'upstream ABI prefix changed'
+assert len(custom_functions)==len(base_functions)+1, 'unexpected extra private exports'
 api = [x for x in functions(spec['exports']) if x['name']=='notification_service_peek_count']
 assert len(api)==1 and int(api[0]['addedRevision'])==state['private_export_revision']
 assert int(spec['revision'])==state['private_export_revision']
