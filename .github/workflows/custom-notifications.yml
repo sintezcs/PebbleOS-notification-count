@@ -1,0 +1,72 @@
+name: Custom notification firmware
+on:
+  push:
+    branches: [codex/notification-count]
+  pull_request:
+    branches: [codex/notification-count]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: custom-notifications-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  tests:
+    runs-on: ubuntu-24.04
+    container:
+      image: ghcr.io/coredevices/pebbleos-docker:v7
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: true
+      - run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - run: python3 -m pip install -r requirements.txt
+      - run: python3 custom/scripts/verify_contract.py
+      - run: pbl test
+      - run: node --test custom/watchface/tests/settings.test.js
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: custom-unit-test-results
+          path: build-test/junit.xml
+  firmware:
+    needs: tests
+    runs-on: ubuntu-24.04
+    container:
+      image: ghcr.io/coredevices/pebbleos-docker:v7
+    strategy:
+      fail-fast: false
+      matrix:
+        slot: [0, 1]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: true
+      - run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - run: python3 -m pip install -r requirements.txt
+      - name: Build PVT firmware and matching SDK
+        run: |
+          pbl configure --board obelix@pvt -DCONFIG_FIRMWARE_SLOT=${{ matrix.slot }} -DCONFIG_RELEASE=y
+          pbl build
+          pbl bundle
+          pbl build sdk
+      - name: Build matching watchface
+        env:
+          NODE_OPTIONS: --openssl-legacy-provider
+        run: |
+          npm install --prefix build/sdk --no-audit --no-fund
+          npm ci --prefix custom/watchface --no-audit --no-fund
+          export NODE_PATH="$GITHUB_WORKSPACE/build/sdk/node_modules"
+          cd custom/watchface
+          python3 ../../build/sdk/waf configure build
+          python3 tools/strip_pbw.py build/watchface.pbw build/release.pbw
+      - name: Verify and collect packages
+        run: python3 custom/scripts/package_ci.py ${{ matrix.slot }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: time2-pvt-slot${{ matrix.slot }}-paired-firmware
+          path: artifacts/
+          if-no-files-found: error
+          retention-days: 90
