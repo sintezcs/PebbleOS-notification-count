@@ -34,6 +34,65 @@
 
 extern void notification_storage_reset(void);
 
+#include "applib/notification_service.h"
+
+static TimelineItem prv_count_test_notification(void) {
+  TimelineItem item = {
+    .header = {
+      .type = TimelineItemTypeNotification,
+      .layout = LayoutIdGeneric,
+      .timestamp = 0x53f0dda5,
+    },
+  };
+  uuid_generate(&item.header.id);
+  return item;
+}
+
+void test_notification_storage__count_empty(void) {
+  cl_assert_equal_i(notification_service_peek_count(), 0);
+}
+
+void test_notification_storage__count_more_than_display_limit(void) {
+  for (unsigned int i = 0; i < 120; ++i) {
+    TimelineItem item = prv_count_test_notification();
+    notification_storage_store(&item);
+  }
+  cl_assert_equal_i(notification_service_peek_count(), 120);
+}
+
+void test_notification_storage__count_retained_including_read(void) {
+  TimelineItem first = prv_count_test_notification();
+  TimelineItem second = prv_count_test_notification();
+  notification_storage_store(&first);
+  notification_storage_store(&second);
+  cl_assert_equal_i(notification_service_peek_count(), 2);
+  notification_storage_set_status(&first.header.id, TimelineItemStatusRead);
+  cl_assert_equal_i(notification_service_peek_count(), 2);
+}
+
+void test_notification_storage__count_excludes_deleted(void) {
+  TimelineItem first = prv_count_test_notification();
+  TimelineItem second = prv_count_test_notification();
+  notification_storage_store(&first);
+  notification_storage_store(&second);
+  notification_storage_remove(&first.header.id);
+  cl_assert_equal_i(notification_service_peek_count(), 1);
+  notification_storage_remove(&first.header.id);
+  cl_assert_equal_i(notification_service_peek_count(), 1);
+  notification_storage_remove(&second.header.id);
+  cl_assert_equal_i(notification_service_peek_count(), 0);
+}
+
+void test_notification_storage__count_after_clear_and_store(void) {
+  TimelineItem item = prv_count_test_notification();
+  notification_storage_store(&item);
+  cl_assert_equal_i(notification_service_peek_count(), 1);
+  notification_storage_reset_and_init();
+  cl_assert_equal_i(notification_service_peek_count(), 0);
+  notification_storage_store(&item);
+  cl_assert_equal_i(notification_service_peek_count(), 1);
+}
+
 typedef void (*SystemTaskEventCallback)(void *data);
 
 static Attribute action1_attributes[] = {
