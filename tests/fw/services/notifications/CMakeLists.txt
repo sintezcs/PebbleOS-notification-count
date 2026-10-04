@@ -18,6 +18,8 @@ pbl_clar_test(test_alerts_preferences
 
 pbl_clar_test(test_notification_storage
   SOURCES
+    src/fw/applib/notification_service.c
+    src/fw/syscall/notification_syscalls.c
     src/fw/services/notifications/notification_storage.c
     src/fw/util/rand/rand.c
     third_party/tinymt/TinyMT/tinymt/tinymt32.c
