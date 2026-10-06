@@ -24,7 +24,7 @@
 #include "stubs_logging.h"
 #include "stubs_mutex.h"
 #include "stubs_system_reset.h"
-#include "stubs_task_watchdog.h"
+#include "stubs_task_wdt.h"
 
 // Fakes
 ////////////////////////////////////
@@ -95,7 +95,7 @@ void test_ancs_app_storage__overwrite(void) {
 }
 
 static uint32_t get_key(const char *bundle_id) {
-  return legacy_defective_checksum_memory(bundle_id, strlen(bundle_id));
+  return pbl_crc32_legacy(bundle_id, strlen(bundle_id));
 }
 
 void test_ancs_app_storage__hash_collisions(void) {

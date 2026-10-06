@@ -16,7 +16,6 @@
 #include "stubs_mutex.h"
 #include "stubs_passert.h"
 #include "stubs_persist.h"
-#include "stubs_prompt.h"
 #include "stubs_msgq.h"
 #include "stubs_resources.h"
 #include "stubs_serial.h"
@@ -29,6 +28,7 @@
 #include "pbl/util/size.h"
 
 #include <stdio.h>
+#include "pbl/kernel/compiler.h"
 
 // helpers from accel manager
 extern void test_accel_manager_get_subsample_info(AccelManagerState *state, uint16_t *num,
@@ -102,8 +102,7 @@ bool accel_get_double_tap_detection_enabled(void) {
   return false;
 }
 
-bool new_timer_add_work_callback_from_isr(NewTimerWorkCallback cb, void *data) {
-  return false;
+void new_timer_add_work_callback_from_isr(NewTimerWorkCallback cb, void *data) {
 }
 bool new_timer_add_work_callback(NewTimerWorkCallback cb, void *data) {
   return true;
@@ -205,7 +204,7 @@ void test_accel_manager__subscription_sampling_rates(void) {
   int max_permutations = 0x1 << poss_rates;
 
   for (int mask = 0; mask < max_permutations; mask++) {
-    int count = __builtin_popcount(mask);
+    int count = PBL_POPCOUNT(mask);
     if (count == 0) {
       continue; // we don't care about the empty set
     }

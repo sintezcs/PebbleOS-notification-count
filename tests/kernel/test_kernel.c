@@ -4,7 +4,6 @@
 #include "clar.h"
 
 #include "pbl/kernel/kernel.h"
-#include "pbl/os/assert.h"
 
 #include "kernel_test.h"
 
@@ -12,22 +11,19 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "pbl/kernel/compiler.h"
 
 // The kernel on the POSIX arch: threads are pthreads that run one at
 // a time under the kernel's scheduling decisions, and time only moves when a
 // test delivers ticks or every thread is blocked.
 
-PBL_NORETURN void os_assertion_failed(const char *filename, int line) {
+PBL_NORETURN void pbl_kernel_assert_failed(const char *filename, int line) {
   fprintf(stderr, "kernel assert at %s:%d\n", filename, line);
   abort();
 }
 
-PBL_NORETURN void os_assertion_failed_lr(const char *filename, int line, uint32_t lr) {
-  os_assertion_failed(filename, line);
-}
-
 #define STACK 4096
-static uint8_t s_stacks[8][STACK] __attribute__((aligned(8)));
+static uint8_t s_stacks[8][STACK] PBL_ALIGNED(8);
 static struct pbl_thread s_threads[8];
 
 static char s_trace[128];

@@ -19,6 +19,7 @@
 #include "fake_spi_flash.h"
 #include "fake_pbl_malloc.h"
 #include "fake_rtc.h"
+#include "pbl/services/time.h"
 
 static TimezoneInfo tz = {
   .tm_gmtoff = -8 * 60 * 60, // PST
@@ -45,14 +46,13 @@ static TimezoneInfo tz = {
 #include "stubs_mutex.h"
 #include "stubs_passert.h"
 #include "stubs_pebble_tasks.h"
-#include "stubs_prompt.h"
 #include "stubs_rand_ptr.h"
 #include "stubs_regular_timer.h"
 #include "stubs_resources.h"
 #include "stubs_session.h"
 #include "stubs_sleep.h"
 #include "stubs_syscalls.h"
-#include "stubs_task_watchdog.h"
+#include "stubs_task_wdt.h"
 #include "stubs_window_stack.h"
 
 void ancs_notifications_enable_bulk_action_mode(bool enable) {

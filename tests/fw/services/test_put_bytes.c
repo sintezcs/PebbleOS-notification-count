@@ -9,7 +9,7 @@
 #include "system/firmware_storage.h"
 #include <pbl/logging/logging.h>
 #include "pbl/kernel/compiler.h"
-#include "util/net.h"
+#include "pbl/util/byteorder.h"
 
 #include <pbl/bluetooth/conn_event_stats.h>
 
@@ -36,9 +36,8 @@
 #include "stubs_mutex.h"
 #include "stubs_passert.h"
 #include "stubs_pfs.h"
-#include "stubs_prompt.h"
 #include "stubs_serial.h"
-#include "stubs_task_watchdog.h"
+#include "stubs_task_wdt.h"
 #include "stubs_tick.h"
 
 extern struct pbl_sem *put_bytes_get_semaphore(void);
@@ -80,10 +79,6 @@ void app_storage_get_file_name(char *name, size_t buf_length, AppInstallId app_i
 void bluetooth_analytics_handle_put_bytes_stats(
     bool successful, uint8_t type, uint32_t total_size, uint32_t elapsed_time_ms,
     const struct pbl_bt_slave_conn_event_stats *orig_stats) {
-}
-
-bool pbl_bt_analytics_get_conn_event_stats(struct pbl_bt_slave_conn_event_stats *stats) {
-  return false;
 }
 
 typedef enum {
@@ -175,9 +170,9 @@ static void prv_receive_data(CommSession *session, const uint8_t *data, size_t l
 static void prv_receive_init(uint32_t total_size, PutBytesObjectType object_type) {
   InitRequest init_msg = (InitRequest){
     .cmd = CmdInit,
-    .total_size = htonl(total_size),
+    .total_size = pbl_cpu_to_be32(total_size),
     .type = object_type,
-    .cookie = htonl(1),
+    .cookie = pbl_cpu_to_be32(1),
   };
   prv_receive_data(s_session, (const uint8_t *)&init_msg, sizeof(init_msg));
 }
@@ -186,9 +181,9 @@ static void prv_receive_init_cookie(uint32_t total_size, PutBytesObjectType obje
                                     uint32_t cookie) {
   InitRequest init_msg = (InitRequest){
     .cmd = CmdInit,
-    .total_size = htonl(total_size),
+    .total_size = pbl_cpu_to_be32(total_size),
     .type = object_type | (1 << 7),
-    .cookie = htonl(cookie),
+    .cookie = pbl_cpu_to_be32(cookie),
   };
   prv_receive_data(s_session, (const uint8_t *)&init_msg, sizeof(init_msg));
 }
@@ -199,7 +194,7 @@ static void prv_receive_init_file(uint32_t total_size, const char *fn, size_t fn
   InitRequest *init_msg = (InitRequest *)buffer;
   *init_msg = (InitRequest){
     .cmd = CmdInit,
-    .total_size = htonl(total_size),
+    .total_size = pbl_cpu_to_be32(total_size),
     .type = ObjectFile,
   };
   memcpy(&init_msg->filename[0], fn, fn_len);
@@ -212,8 +207,8 @@ static void prv_receive_put(uint32_t cookie, const uint8_t *payload, uint32_t pa
   PutRequest *put_msg = (PutRequest *)buffer;
   *put_msg = (PutRequest){
     .cmd = CmdPut,
-    .cookie = htonl(cookie),
-    .payload_size = htonl(payload_size),
+    .cookie = pbl_cpu_to_be32(cookie),
+    .payload_size = pbl_cpu_to_be32(payload_size),
   };
   memcpy(&put_msg->payload[0], payload, payload_size);
   prv_receive_data(s_session, buffer, sizeof(buffer));
@@ -222,8 +217,8 @@ static void prv_receive_put(uint32_t cookie, const uint8_t *payload, uint32_t pa
 static void prv_receive_commit(uint32_t cookie, uint32_t crc) {
   CommitRequest commit_msg = (CommitRequest){
     .cmd = CmdCommit,
-    .cookie = htonl(cookie),
-    .crc = htonl(crc),
+    .cookie = pbl_cpu_to_be32(cookie),
+    .crc = pbl_cpu_to_be32(crc),
   };
   prv_receive_data(s_session, (const uint8_t *)&commit_msg, sizeof(commit_msg));
 }
@@ -231,7 +226,7 @@ static void prv_receive_commit(uint32_t cookie, uint32_t crc) {
 static void prv_receive_abort(uint32_t cookie) {
   AbortRequest abort_msg = (AbortRequest){
     .cmd = CmdAbort,
-    .cookie = htonl(cookie),
+    .cookie = pbl_cpu_to_be32(cookie),
   };
   prv_receive_data(s_session, (const uint8_t *)&abort_msg, sizeof(abort_msg));
 }
@@ -239,7 +234,7 @@ static void prv_receive_abort(uint32_t cookie) {
 static void prv_receive_install(uint32_t cookie) {
   InstallRequest install_msg = (InstallRequest){
     .cmd = CmdInstall,
-    .cookie = htonl(cookie),
+    .cookie = pbl_cpu_to_be32(cookie),
   };
   prv_receive_data(s_session, (const uint8_t *)&install_msg, sizeof(install_msg));
 }
@@ -322,7 +317,7 @@ static void prv_system_msg_sent_callback(uint16_t endpoint_id, const uint8_t *da
   cl_assert_equal_i(data_length, 5);
 
   ResponseMsg *response_msg = (ResponseMsg *)data;
-  s_last_response_cookie = ntohl(response_msg->cookie);
+  s_last_response_cookie = pbl_be32_to_cpu(response_msg->cookie);
   if (response_msg->response == ResponseAck) {
     ++s_acks_received;
   } else if (response_msg->response == ResponseNack) {
@@ -578,8 +573,8 @@ void test_put_bytes__put_message_length_field_too_long(void) {
   PutRequest *put_msg = (PutRequest *)buffer;
   *put_msg = (PutRequest){
     .cmd = CmdPut,
-    .cookie = htonl(s_last_response_cookie),
-    .payload_size = htonl(payload_size) + 1 /* one off! */,
+    .cookie = pbl_cpu_to_be32(s_last_response_cookie),
+    .payload_size = pbl_cpu_to_be32(payload_size) + 1 /* one off! */,
   };
   memcpy(&put_msg->payload[0], chunk, payload_size);
   prv_receive_data(s_session, buffer, sizeof(buffer));
@@ -859,6 +854,27 @@ void test_put_bytes__install_message_cookie_mismatch(void) {
   assert_nack_count(1);
 }
 
+// The phone matches a response to the request it sent, and the commit that precedes an install has
+// already cleaned the transfer state up, so the install's own token is the only one left to answer
+// with.
+void test_put_bytes__install_ack_carries_the_install_token(void) {
+  prv_receive_init_put_and_commit_fw_object();
+  const uint32_t install_token = s_last_response_cookie;
+
+  prv_receive_install(install_token);
+  assert_ack_count(1);
+  cl_assert_equal_i(s_last_response_cookie, install_token);
+}
+
+void test_put_bytes__install_nack_carries_the_install_token(void) {
+  prv_receive_init_put_and_commit_fw_object();
+  const uint32_t unknown_token = ~s_last_response_cookie;
+
+  prv_receive_install(unknown_token);
+  assert_nack_count(1);
+  cl_assert_equal_i(s_last_response_cookie, unknown_token);
+}
+
 void test_put_bytes__install_message_prf_boot_bit_set(void) {
   prv_receive_init_put_commit_and_install(ObjectRecovery);
   assert_ack_count(1);
@@ -988,6 +1004,22 @@ void test_put_bytes__session_closed_after_fw_init(void) {
   fake_system_task_callbacks_invoke_pending();
 
   assert_cleanup_event(ObjectFirmware, VALID_OBJECT_SIZE);
+}
+
+void test_put_bytes__session_opened_before_fw_init(void) {
+  put_bytes_expect_init(EXPECT_INIT_TIMEOUT_MS);
+
+  PebbleCommSessionEvent app_event = {.is_open = true, .is_system = true};
+
+  // The session opening is handled after the update started
+  put_bytes_handle_comm_session_event(&app_event);
+  fake_event_reset_count();
+  fake_system_task_callbacks_invoke_pending();
+  cl_assert_equal_i(fake_event_get_count(), 0);
+
+  prv_receive_init_fw_object();
+  assert_ack_count(1);
+  assert_nack_count(0);
 }
 
 void test_put_bytes__session_closed_after_expect_init(void) {

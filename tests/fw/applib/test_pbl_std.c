@@ -16,14 +16,14 @@
 #include "stubs_pbl_malloc.h"
 #include "stubs_pebble_tasks.h"
 #include "stubs_print.h"
-#include "stubs_prompt.h"
 #include "stubs_serial.h"
 #include "stubs_sleep.h"
 #include "stubs_syscall_internal.h"
 #include "stubs_system_reset.h"
-#include "stubs_task_watchdog.h"
+#include "stubs_task_wdt.h"
 #include "stubs_app_state.h"
 #include "stubs_worker_state.h"
+#include "pbl/services/time.h"
 
 // Overrides
 //////////////////////////////////////////////////////////

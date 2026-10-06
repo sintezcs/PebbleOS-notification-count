@@ -24,11 +24,10 @@
 #include "stubs_passert.h"
 #include "stubs_pbl_malloc.h"
 #include "stubs_pebble_tasks.h"
-#include "stubs_prompt.h"
 #include "stubs_rand_ptr.h"
 #include "stubs_serial.h"
 #include "stubs_sleep.h"
-#include "stubs_task_watchdog.h"
+#include "stubs_task_wdt.h"
 
 #define TEST_START FLASH_REGION_FILE_TEST_SPACE_BEGIN
 #define TEST_SIZE  (FLASH_REGION_FILE_TEST_SPACE_END - FLASH_REGION_FILE_TEST_SPACE_BEGIN)
@@ -104,7 +103,7 @@ static Attribute action2_attributes[] = {
   {.id = AttributeIdTitle, .cstring = "Archive"},
 };
 
-static StringList string_list = {
+static struct pbl_string_list string_list = {
   .serialized_byte_length = 3,
   .data = "A\0B",
 };
@@ -174,13 +173,14 @@ static void compare_attr_list(AttributeList a, AttributeList b) {
         cl_assert_equal_i(a.attributes[i].int8, b.attributes[i].int8);
         break;
       case AttributeIdCannedResponses: {
-        StringList *list_a = a.attributes[i].string_list;
-        StringList *list_b = b.attributes[i].string_list;
+        struct pbl_string_list *list_a = a.attributes[i].string_list;
+        struct pbl_string_list *list_b = b.attributes[i].string_list;
         cl_assert_equal_i(list_a->serialized_byte_length, list_b->serialized_byte_length);
-        cl_assert_equal_i(string_list_count(list_a), string_list_count(list_b));
-        uint32_t count = string_list_count(list_a);
+        cl_assert_equal_i(pbl_string_list_count(list_a), pbl_string_list_count(list_b));
+        uint32_t count = pbl_string_list_count(list_a);
         for (uint32_t idx = 0; i < count; i++) {
-          cl_assert_equal_s(string_list_get_at(list_a, idx), string_list_get_at(list_b, idx));
+          cl_assert_equal_s(pbl_string_list_get_at(list_a, idx),
+                            pbl_string_list_get_at(list_b, idx));
         }
         break;
       }
@@ -205,6 +205,58 @@ static void compare_notifications(TimelineItem *a, TimelineItem *b) {
     cl_assert_equal_i(a->action_group.actions[i].type, b->action_group.actions[i].type);
     compare_attr_list(a->action_group.actions[i].attr_list, b->action_group.actions[i].attr_list);
   }
+}
+
+typedef struct {
+  Uuid older_id;
+  Uuid recent_id;
+  const char *expected_title;
+  uint8_t header_count;
+  uint8_t item_count;
+} NotificationItemsIteratorContext;
+
+static char s_title_buffer[ATTRIBUTE_TITLE_MAX_LEN + 1];
+static char s_sender_buffer[ATTRIBUTE_TITLE_MAX_LEN + 1];
+static Attribute s_string_attributes[] = {
+  {.id = AttributeIdTitle, .cstring = s_title_buffer},
+  {.id = AttributeIdSender, .cstring = s_sender_buffer},
+};
+static AttributeList s_string_attr_list = {
+  .num_attributes = ARRAY_LENGTH(s_string_attributes),
+  .attributes = s_string_attributes,
+};
+
+static bool prv_items_iterator_callback(void *data, const CommonTimelineItemHeader *header,
+                                        const TimelineItem *item) {
+  NotificationItemsIteratorContext *context = data;
+  if (item) {
+    context->item_count++;
+    cl_assert(uuid_equal(&item->header.id, &context->recent_id));
+    cl_assert_equal_s(attribute_get_string(&item->attr_list, AttributeIdTitle, NULL),
+                      context->expected_title);
+    cl_assert_equal_s(attribute_get_string(&item->attr_list, AttributeIdSender, NULL), "");
+    cl_assert(attribute_get_string(&item->attr_list, AttributeIdBody, NULL) == NULL);
+  } else {
+    context->header_count++;
+    cl_assert(uuid_equal(&header->id, &context->older_id));
+  }
+  return true;
+}
+
+typedef struct {
+  Uuid expected_ids[2];
+  uint8_t item_count;
+} RecoveringNotificationItemsIteratorContext;
+
+static bool prv_recovering_items_iterator_callback(void *data,
+                                                   const CommonTimelineItemHeader *header,
+                                                   const TimelineItem *item) {
+  RecoveringNotificationItemsIteratorContext *context = data;
+  cl_assert(item);
+  cl_assert(context->item_count < ARRAY_LENGTH(context->expected_ids));
+  cl_assert(uuid_equal(&item->header.id, &context->expected_ids[context->item_count]));
+  context->item_count++;
+  return true;
 }
 
 // Tests
@@ -245,6 +297,88 @@ void test_notification_storage__basic(void) {
   Uuid invalid_uuid;
   uuid_generate(&invalid_uuid);
   cl_assert_equal_b(notification_storage_get(&invalid_uuid, &r), false);
+}
+
+void test_notification_storage__iterate_strings_after_skips_old_and_deleted_payloads(void) {
+  TimelineItem older = {
+    .header =
+        {
+          .id = UuidMake(1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
+          .timestamp = 100,
+          .type = TimelineItemTypeNotification,
+          .layout = LayoutIdGeneric,
+        },
+    .attr_list = {
+      .num_attributes = ARRAY_LENGTH(attributes),
+      .attributes = attributes,
+    },
+  };
+  TimelineItem recent = older;
+  recent.header.id = UuidMake(2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+  recent.header.timestamp = 200;
+  TimelineItem deleted = older;
+  deleted.header.id = UuidMake(3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+  deleted.header.timestamp = 300;
+
+  notification_storage_store(&older);
+  notification_storage_store(&recent);
+  notification_storage_store(&deleted);
+  notification_storage_remove(&deleted.header.id);
+
+  NotificationItemsIteratorContext context = {
+    .older_id = older.header.id,
+    .recent_id = recent.header.id,
+    .expected_title = "Sender",
+  };
+  notification_storage_iterate_strings_after(200, &s_string_attr_list, sizeof(s_title_buffer),
+                                             prv_items_iterator_callback, &context);
+
+  cl_assert_equal_i(context.header_count, 1);
+  cl_assert_equal_i(context.item_count, 1);
+
+  context.header_count = 0;
+  context.item_count = 0;
+  context.expected_title = "Sen";
+  notification_storage_iterate_strings_after(200, &s_string_attr_list, 4,
+                                             prv_items_iterator_callback, &context);
+
+  cl_assert_equal_i(context.header_count, 1);
+  cl_assert_equal_i(context.item_count, 1);
+}
+
+void test_notification_storage__iterate_strings_after_skips_corrupt_record(void) {
+  TimelineItem first = {
+    .header =
+        {
+          .id = UuidMake(1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
+          .timestamp = 100,
+          .type = TimelineItemTypeNotification,
+          .layout = LayoutIdGeneric,
+        },
+    .attr_list = {
+      .num_attributes = ARRAY_LENGTH(attributes),
+      .attributes = attributes,
+    },
+  };
+  TimelineItem corrupt = first;
+  corrupt.header.id = UuidMake(2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+  corrupt.header.timestamp = 200;
+  corrupt.header.status = 0xC0;
+  TimelineItem last = first;
+  last.header.id = UuidMake(3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+  last.header.timestamp = 300;
+
+  notification_storage_store(&first);
+  notification_storage_store(&corrupt);
+  notification_storage_store(&last);
+
+  RecoveringNotificationItemsIteratorContext context = {
+    .expected_ids = {first.header.id, last.header.id},
+  };
+  notification_storage_iterate_strings_after(0, &s_string_attr_list, sizeof(s_title_buffer),
+                                             prv_recovering_items_iterator_callback, &context);
+
+  cl_assert_equal_i(context.item_count, ARRAY_LENGTH(context.expected_ids));
 }
 
 void test_notification_storage__multiple(void) {

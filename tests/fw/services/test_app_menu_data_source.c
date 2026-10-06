@@ -60,7 +60,6 @@
 #include "stubs_process_loader.h"
 #include "stubs_process_manager.h"
 #include "stubs_process_manager.h"
-#include "stubs_prompt.h"
 #include "stubs_put_bytes.h"
 #include "stubs_quick_launch.h"
 #include "stubs_rand_ptr.h"
@@ -68,13 +67,14 @@
 #include "stubs_shell_prefs.h"
 #include "stubs_sleep.h"
 #include "stubs_system_task.h"
-#include "stubs_task_watchdog.h"
+#include "stubs_task_wdt.h"
 #include "stubs_watchface.h"
 #include "stubs_worker_manager.h"
 
 // Fake Includes
 ////////////////////////////////////
 #include "fake_spi_flash.h"
+#include "pbl/services/time.h"
 
 // Test reset function for app_order_storage cached state
 extern void app_order_storage_reset_for_tests(void);

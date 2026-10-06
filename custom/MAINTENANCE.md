@@ -14,7 +14,7 @@ Time 2; new release builds require their own verification and physical check.
 Check all official published, non-prerelease releases with both PVT slot assets.
 Compare semantic versions against `base_tag`; do not use GitHub's global `latest`
 endpoint alone. Older branch backports can be published later than the current
-release. Never downgrade. Initially the highest eligible base is v4.38.4.
+release. Never downgrade. The maintained base is recorded in custom/state.json.
 
 For a newer release, preserve a known-good branch and create an isolated candidate.
 Fetch only needed source/submodules. Rebase the notification API and custom tooling

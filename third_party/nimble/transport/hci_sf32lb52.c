@@ -8,6 +8,8 @@
 
 #include <bf0_hal.h>
 #include <kernel/pebble_tasks.h>
+#include <pbl/bluetooth/id_addr.h>
+#include <pbl/kernel/irq.h>
 #include <pbl/kernel/sem.h>
 #include <pbl/kernel/thread.h>
 #include <system/hexdump.h>
@@ -109,7 +111,7 @@ static uint8_t s_hci_buf[MAX_HCI_PKT_SIZE];
 
 extern void lcpu_power_on(void);
 extern uint8_t lcpu_power_off(void);
-extern void lcpu_custom_nvds_config(void);
+extern void lcpu_custom_nvds_config(const uint8_t *bd_addr);
 
 #if defined(NIMBLE_HCI_SF32LB52_TRACE_LOG)
 void prv_hci_trace(uint8_t type, const uint8_t *data, uint16_t len, uint8_t h4tl_packet) {
@@ -182,6 +184,10 @@ void prv_hci_trace_mbuf(uint8_t type, struct os_mbuf *om, uint8_t h4tl_packet) {
 #define prv_hci_trace_mbuf(type, om, h4tl_packet)
 #endif
 
+void LCPU2HCPU_IRQHandler(void);
+
+PBL_IRQ_CONNECT(LCPU2HCPU, 5, LCPU2HCPU_IRQHandler, , 0);
+
 static int32_t prv_ipc_rx_ind(ipc_queue_handle_t handle, size_t size) {
   pbl_sem_give(&s_ipc_data_ready);
 
@@ -217,7 +223,6 @@ static int prv_config_ipc(void) {
     return -1;
   }
 
-  NVIC_SetPriority(LCPU2HCPU_IRQn, 5);
   ret = ipc_queue_open(s_ipc_port);
   if (ret != 0) {
     PBL_LOG_ERR("ipc_queue_open failed (%" PRId32 ")", ret);
@@ -294,6 +299,21 @@ static void prv_hci_task_main(void *unused) {
   }
 }
 
+static void prv_nvds_config(void) {
+#ifdef CONFIG_BT_ID_ADDR
+  struct pbl_bt_addr addr;
+  enum pbl_bt_id_addr_type type;
+  int rc;
+
+  rc = pbl_bt_id_addr_get(&addr, &type);
+  PBL_ASSERT(rc == 0, "No identity address (%d)", rc);
+
+  lcpu_custom_nvds_config(type == PBL_BT_ID_ADDR_PUBLIC ? addr.octets : NULL);
+#else
+  lcpu_custom_nvds_config(NULL);
+#endif
+}
+
 void ble_transport_ll_reinit(void) {
   int ret;
 
@@ -302,7 +322,7 @@ void ble_transport_ll_reinit(void) {
   ret = prv_config_ipc();
   PBL_ASSERTN(ret == 0);
 
-  lcpu_custom_nvds_config();
+  prv_nvds_config();
   lcpu_power_on();
 }
 
@@ -330,7 +350,7 @@ void ble_transport_ll_init(void) {
 }
 
 void ble_transport_ll_deinit(void) {
-  NVIC_DisableIRQ(LCPU2HCPU_IRQn);
+  pbl_irq_disable(PBL_IRQN(LCPU2HCPU));
   ipc_queue_close(s_ipc_port);
   ipc_queue_deinit(s_ipc_port);
   s_ipc_port = IPC_QUEUE_INVALID_HANDLE;

@@ -26,10 +26,9 @@
 #include "stubs_mutex.h"
 #include "stubs_passert.h"
 #include "stubs_pbl_malloc.h"
-#include "stubs_prompt.h"
 #include "stubs_rand_ptr.h"
 #include "stubs_sleep.h"
-#include "stubs_task_watchdog.h"
+#include "stubs_task_wdt.h"
 
 extern const char *PREF_KEY_SEND_TEXT_APP;
 #define SEND_TEXT_KEY     ((uint8_t *)PREF_KEY_SEND_TEXT_APP)

@@ -29,12 +29,11 @@
 #include "stubs_mutex.h"
 #include "stubs_passert.h"
 #include "stubs_pbl_malloc.h"
-#include "stubs_prompt.h"
 #include "stubs_rand_ptr.h"
 #include "stubs_regular_timer.h"
 #include "stubs_reminder_db.h"
 #include "stubs_sleep.h"
-#include "stubs_task_watchdog.h"
+#include "stubs_task_wdt.h"
 
 const char *timeline_get_private_data_source(Uuid *parent_id) {
   return NULL;
@@ -192,4 +191,22 @@ void test_pin_db__set_status_bits(void) {
   cl_must_pass(pin_db_set_status_bits(&item1.header.id, TimelineItemStatusDismissed));
   cl_must_pass(pin_db_read_item_header(&item, &item1.header.id));
   cl_assert_equal_i(item.header.status, TimelineItemStatusDismissed);
+}
+
+void test_pin_db__flush_keeps_watch_pins(void) {
+  TimelineItem watch_item = item2;
+  watch_item.header.from_watch = true;
+
+  cl_must_pass(pin_db_insert_item(&item1));
+  cl_must_pass(pin_db_insert_item(&watch_item));
+  cl_must_pass(pin_db_insert_item(&item3));
+
+  cl_must_pass(pin_db_flush());
+
+  cl_assert_equal_i(pin_db_get_len((uint8_t *)&item1.header.id, sizeof(TimelineItemId)), 0);
+  cl_assert_equal_i(pin_db_get_len((uint8_t *)&item3.header.id, sizeof(TimelineItemId)), 0);
+
+  TimelineItem item;
+  cl_must_pass(pin_db_read_item_header(&item, &watch_item.header.id));
+  cl_assert(item.header.from_watch);
 }
