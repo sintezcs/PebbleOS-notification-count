@@ -17,9 +17,9 @@ It traverses record headers without deserializing payloads or allocating message
 buffers. Apps should refresh on launch or focus and at an appropriate interval;
 the snapshot API does not subscribe to changes.
 
-This API is registered at exported-symbol revision 110 and process SDK version
-5.0x6c. Build the firmware and its SDK together following
-[SDK export instructions](sdk_export.md). A watchface built against this revision
+This API is registered at exported-symbol revision 112 and process SDK version
+5.0x6e. Build the firmware and its SDK together following
+[SDK export instructions](../sdk/exporting.md). A watchface built against this revision
 requires firmware containing the same ABI. The firmware's SDK compatibility check
 rejects a newer app on older firmware.
 

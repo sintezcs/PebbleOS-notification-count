@@ -21,8 +21,9 @@ Fetch only needed source/submodules. Rebase the notification API and custom tool
 onto that exact tag, resolving changed source paths and code deliberately. Update
 state's base tag/commit and allocate the private export revision after upstream's
 last revision. Choose a private SDK minor above the upstream minor and any already
-reserved minor (0x6b was reserved by main when this fork started). Do not blindly
-reuse revision 110 or SDK 0x6c when upstream changes. Verify the official symbol
+reserved minor. For v4.42.0, main reserves revisions through 111 and minor 0x6d;
+this private build uses revision 112 and SDK minor 0x6e. Do not blindly reuse
+these values when upstream changes. Verify the official symbol
 prefix is unchanged and the count API is appended, not inserted in existing ABI.
 
 If upstream has an equivalent official API, check retained/read/deleted semantics

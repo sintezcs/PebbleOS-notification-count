@@ -16,17 +16,20 @@
 #include <resource/resource.h>
 #include <resource/resource_ids.auto.h>
 #include <shell/system_theme.h>
+#include <shell/system_theme_style.h>
 
 // Fakes
 /////////////////////
 
 #include <fake_resource_syscalls.h>
+#include <fake_rtc.h>
 #include <fake_spi_flash.h>
 #include <fixtures/load_test_resources.h>
+#include <fixtures/screen_grid.h>
+#include <stubs_compiled_with_legacy2_sdk.h>
 
 static bool s_cell_is_highlighted = false;
 
-// TODO PBL-23041: When round MenuLayer animations are enabled, we need a "is_selected" function
 bool menu_cell_layer_is_highlighted(const Layer *cell_layer) {
   return s_cell_is_highlighted;
 }
@@ -64,31 +67,10 @@ AppInstallId sys_process_manager_get_current_process_id(void) {
 // Stubs
 /////////////////////
 
-#include <stubs_analytics.h>
-#include <stubs_app_install_manager.h>
-#include <stubs_app_state.h>
-#include <stubs_bootbits.h>
-#include <stubs_compiled_with_legacy2_sdk.h>
-#include <stubs_content_indicator.h>
-#include <stubs_heap.h>
-#include <stubs_logging.h>
-#include <stubs_memory_layout.h>
-#include <stubs_mutex.h>
-#include <stubs_passert.h>
-#include <stubs_pbl_malloc.h>
-#include <stubs_print.h>
-#include <stubs_process_manager.h>
-#include <stubs_serial.h>
-#include <stubs_shell_prefs.h>
-#include <stubs_sleep.h>
 // Hide the PBL_WEAK stub so the controllable strong definition above owns the real symbol
 #define sys_process_manager_get_current_process_id \
   prv_stubbed_sys_process_manager_get_current_process_id
-#include <stubs_syscalls.h>
 #undef sys_process_manager_get_current_process_id
-#include <stubs_task_wdt.h>
-#include <stubs_ui_window.h>
-#include <stubs_unobstructed_area.h>
 
 void window_long_click_subscribe(ButtonId button_id, uint16_t delay_ms, ClickHandler down_handler,
                                  ClickHandler up_handler) {
@@ -373,7 +355,7 @@ void prv_prepare_canvas_and_render_cells(MenuCellType cell_type, int16_t cell_wi
 //////////////////////
 
 void test_menu_layer_system_cells__basic_cell_width_144_legacy2(void) {
-#if defined(CONFIG_BOARD_ASTERIX)
+#if defined(CONFIG_PLATFORM_FLINT)
   // NOTE: The generated bitmap will look really funky because it's rendering 8bit gbitmaps as
   //       1bit due to the legacy2 check in gbitmap_get_format. This is normal and expected.
 
@@ -501,6 +483,58 @@ void test_menu_layer_system_cells__basic_cell_content_sizes(void) {
   cl_check(gbitmap_pbi_eq(s_dest_bitmap, TEST_PBI_FILE));
 }
 
+//! Highlighted text that doesn't fit shows an ellipsis, then scrolls sideways after a pause.
+//! Columns: start, mid-scroll, and a third-party app at the same time, which never scrolls.
+void test_menu_layer_system_cells__scrolling_text(void) {
+#if PBL_RECT
+  const int16_t cell_width = 144;
+  const MenuLayerSystemCellTestRowData rows[] = {
+    {"The Lord of the Rings", nullptr, nullptr, nullptr, DEFAULT_ICON_ALIGN},
+    {"The Lord of the Rings", "The Fellowship of the Ring", nullptr, nullptr, DEFAULT_ICON_ALIGN},
+    {"Star Wars", "The Empire Strikes Back", nullptr, &s_tictoc_icon_bitmap, DEFAULT_ICON_ALIGN},
+  };
+  const int num_columns = 3;
+  const int16_t row_height = menu_cell_basic_cell_height();
+
+  gbitmap_destroy(s_dest_bitmap);
+  const GSize bitmap_size =
+      GSize(GRID_CELL_PADDING + num_columns * (cell_width + GRID_CELL_PADDING),
+            GRID_CELL_PADDING + ARRAY_LENGTH(rows) * (row_height + GRID_CELL_PADDING));
+  s_dest_bitmap =
+      gbitmap_create_blank(bitmap_size, PBL_IF_COLOR_ELSE(GBitmapFormat8Bit, GBitmapFormat1Bit));
+  s_ctx.dest_bitmap = *s_dest_bitmap;
+  s_ctx.draw_state.clip_box.size = bitmap_size;
+  s_ctx.draw_state.drawing_box.size = bitmap_size;
+  memset(s_dest_bitmap->addr, GColorShockingPinkARGB8,
+         s_dest_bitmap->row_size_bytes * s_dest_bitmap->bounds.size.h);
+
+  for (unsigned int i = 0; i < ARRAY_LENGTH(rows); i++) {
+    GRect cell_bounds =
+        GRect(GRID_CELL_PADDING, GRID_CELL_PADDING + i * (row_height + GRID_CELL_PADDING),
+              cell_width, row_height);
+    fake_rtc_set_ticks(0);
+    prv_draw_cell(MenuCellType_Basic, &cell_bounds, &rows[i],
+                  &s_menu_system_basic_cell_test_column_data[0], true /* is_selected */);
+
+    // Past the 800 ms pause
+    fake_rtc_set_ticks(RTC_TICKS_HZ * 3 / 2);
+    cell_bounds.origin.x += cell_width + GRID_CELL_PADDING;
+    prv_draw_cell(MenuCellType_Basic, &cell_bounds, &rows[i],
+                  &s_menu_system_basic_cell_test_column_data[0], true /* is_selected */);
+
+    s_current_task = PebbleTask_App;
+    s_current_process_id = (AppInstallId)1;
+    cell_bounds.origin.x += cell_width + GRID_CELL_PADDING;
+    prv_draw_cell(MenuCellType_Basic, &cell_bounds, &rows[i],
+                  &s_menu_system_basic_cell_test_column_data[0], true /* is_selected */);
+    s_current_task = PebbleTask_KernelMain;
+    s_current_process_id = (AppInstallId)(-1);
+  }
+
+  cl_check(gbitmap_pbi_eq(s_dest_bitmap, TEST_PBI_FILE));
+#endif
+}
+
 //! Third-party apps must keep the runtime platform's default cell dimensions no matter what
 //! content size the user prefers.
 void test_menu_layer_system_cells__third_party_app_keeps_platform_default(void) {
@@ -530,7 +564,9 @@ void test_menu_layer_system_cells__third_party_app_keeps_platform_default(void) 
   // Positive control: a system process follows the content size
   system_theme_set_content_size(PreferredContentSizeExtraLarge);
   s_current_task = PebbleTask_KernelMain;
-  cl_assert_equal_i(menu_cell_basic_cell_height(), PBL_IF_RECT_ELSE(64, 85));
+  cl_assert_equal_i(
+      menu_cell_basic_cell_height(),
+      system_theme_get_style_for_size(PreferredContentSizeExtraLarge)->menu_cell.basic_cell_height);
 
   // Restore process identity and content size for subsequent tests
   s_current_process_id = (AppInstallId)(-1);
@@ -664,4 +700,43 @@ void test_menu_layer_system_cells__larger_two_line_cell_has_matching_padding(voi
   cl_assert_equal_i(height - foreground.origin.y - foreground.size.h, foreground.origin.x);
   system_theme_set_content_size(PreferredContentSizeDefault);
 #endif
+}
+
+//! A screen of rows with only a title, as Settings and Quiet Time list them, at each size
+void test_menu_layer_system_cells__single_line_content_sizes(void) {
+  static const char *const titles[] = {
+    "Notifications", "Bluetooth", "Quiet Time", "Display", "Timeline", "Health", "System",
+  };
+  ScreenGrid grid;
+  screen_grid_init(&grid, 1);
+
+  gbitmap_destroy(s_dest_bitmap);
+  s_dest_bitmap = gbitmap_create_blank(DISP_FRAME.size,
+                                       PBL_IF_COLOR_ELSE(GBitmapFormat8Bit, GBitmapFormat1Bit));
+  s_ctx.dest_bitmap = *s_dest_bitmap;
+  s_ctx.draw_state.clip_box = DISP_FRAME;
+  s_ctx.draw_state.drawing_box = DISP_FRAME;
+
+  for (PreferredContentSize size = grid.first_size; size <= grid.last_size; size++) {
+    system_theme_set_content_size(size);
+    const int16_t row_height = menu_cell_basic_cell_height();
+    int16_t y_offset = 0;
+    for (unsigned int i = 0; i < ARRAY_LENGTH(titles); i++) {
+      const MenuLayerSystemCellTestRowData row_data = {
+        .title = (char *)titles[i],
+        .icon_align = DEFAULT_ICON_ALIGN,
+      };
+      const GRect cell_bounds = GRect(0, y_offset, DISP_COLS, row_height);
+      prv_draw_cell(MenuCellType_Basic, &cell_bounds, &row_data,
+                    &s_menu_system_basic_cell_test_column_data[0], i == 0 /* is_selected */);
+      y_offset += row_height;
+    }
+    s_ctx.draw_state.drawing_box = DISP_FRAME;
+    screen_grid_add(&grid, &s_ctx, size, 0);
+  }
+
+  // The content size setting leaks across tests in this process, restore it before checking
+  system_theme_set_content_size(PreferredContentSizeDefault);
+
+  screen_grid_check(&grid, TEST_PBI_FILE);
 }

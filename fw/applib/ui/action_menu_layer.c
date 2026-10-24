@@ -5,6 +5,7 @@
 
 #include "action_menu_window_private.h"
 
+#include <pbl/kernel/assert.h>
 #include <pbl/util/math.h>
 #include <pbl/util/testing.h>
 
@@ -21,11 +22,12 @@
 #include <kernel/ui/kernel_ui.h>
 #include <resource/resource_ids.auto.h>
 #include <shell/system_theme.h>
-#include <system/passert.h>
 
-#define INDICATOR                "»"
-#define GLYPH_SCRATCH_SIZE       32
-#define GLYPH_CELL_SIZE          48
+#define INDICATOR          "»"
+#define GLYPH_SCRATCH_SIZE 32
+#define GLYPH_CELL_SIZE    48
+// On color, short rows take part of their spacing so the selection has room around the label
+#define SHORT_CELL_EXTRA         PBL_IF_COLOR_ELSE(6, 0)
 #define GLYPH_CELL_GAP           4
 #define GLYPHS_PER_ROUND_PAGE    10
 #define GLYPH_PAGE_SWIPE_MIN     24
@@ -51,9 +53,29 @@ static const int MAX_NUM_VISIBLE_LINES = 2;
 static const int SHORT_ITEM_MAX_ROWS_SPALDING = 3;
 #endif
 
-static GFont prv_get_item_font(void) {
-  return system_theme_get_font(TextStyleFont_MenuCellTitle);
+static GFont prv_get_font(const ActionMenuLayer *aml, TextStyleFont font) {
+  return (aml->content_size < NumPreferredContentSizes)
+             ? system_theme_get_font_for_size(aml->content_size, font)
+             : system_theme_get_font(font);
 }
+
+static GFont prv_get_item_font(const ActionMenuLayer *aml) {
+  return prv_get_font(aml, TextStyleFont_MenuCellTitle);
+}
+
+[[maybe_unused]] static int16_t prv_horizontal_inset(const ActionMenuLayer *aml) {
+  return (aml->content_size < NumPreferredContentSizes)
+             ? menu_cell_basic_horizontal_inset_for_size(aml->content_size)
+             : menu_cell_basic_horizontal_inset();
+}
+
+#if PBL_RECT && CONFIG_SCREEN_COLOR_DEPTH_BITS == 8
+static int16_t prv_small_cell_height(const ActionMenuLayer *aml) {
+  return (aml->content_size < NumPreferredContentSizes)
+             ? menu_cell_small_cell_height_for_size(aml->content_size)
+             : menu_cell_small_cell_height();
+}
+#endif
 
 static bool prv_is_glyph_grid(const ActionMenuLayer *aml) {
 #if GLYPH_GRID_SUPPORTED
@@ -86,8 +108,8 @@ static int prv_short_row_start(const ActionMenuLayer *aml, int row) {
 
 #if PBL_ROUND
 //! Only used on round displays to achieve a fish-eye effect
-static GFont prv_get_unfocused_item_font(void) {
-  return system_theme_get_font(TextStyleFont_Header);
+static GFont prv_get_unfocused_item_font(const ActionMenuLayer *aml) {
+  return prv_get_font(aml, TextStyleFont_Header);
 }
 #endif
 
@@ -267,11 +289,8 @@ static void prv_cell_column_draw(GContext *ctx, struct Layer const *cell_layer,
 
     if (sel_idx == i) {
       graphics_context_set_text_color(ctx, PBL_IF_COLOR_ELSE(GColorWhite, GColorBlack));
-#if CONFIG_SCREEN_COLOR_DEPTH_BITS == 1
-      // We only want to have a background on non-color platforms, while leaving this in with
-      // a PBL_IF_COLOR_ELSE makes this a no-op, we'll save some cycles and code space just
-      // skipping it.
-      graphics_context_set_fill_color(ctx, GColorWhite);
+      // Color emoji ignore the text color, so the selection needs a background too
+      graphics_context_set_fill_color(ctx, PBL_IF_COLOR_ELSE(GColorDarkGray, GColorWhite));
 
       const int16_t y_offset = 1;
       const int16_t padding = r.size.w / 6;
@@ -280,8 +299,19 @@ static void prv_cell_column_draw(GContext *ctx, struct Layer const *cell_layer,
       bg_rect.origin.y = layer_bounds->origin.y;
       bg_rect.size.h = layer_bounds->size.h;
       bg_rect = grect_inset_internal(bg_rect, padding, y_offset);
-      graphics_fill_round_rect(ctx, &bg_rect, corner_radius, GCornersAll);
+#if PBL_COLOR
+      // Square around single glyphs, wider for longer labels
+      const GSize text_size = graphics_text_layout_get_max_used_size(
+          ctx, items[i].label, font, r, GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter,
+          nullptr);
+      const int16_t text_padding = 4;
+      const int16_t width = (text_size.w <= bg_rect.size.h)
+                                ? bg_rect.size.h
+                                : MIN(text_size.w + 2 * text_padding, bg_rect.size.w);
+      bg_rect.origin.x += (bg_rect.size.w - width) / 2;
+      bg_rect.size.w = width;
 #endif
+      graphics_fill_round_rect(ctx, &bg_rect, corner_radius, GCornersAll);
     } else {
       graphics_context_set_text_color(ctx, PBL_IF_COLOR_ELSE(GColorDarkGray, GColorWhite));
     }
@@ -315,8 +345,8 @@ static int16_t prv_get_item_line_height(ActionMenuLayer *aml, int idx) {
   // In calculating the item line height for round displays, we need to horizontally inset by the
   // standard focused cell inset since that's the horizontal inset of the cells where we show
   // the vertical scrolling animation of long text cells (where the height is crucial to be correct)
-  const int inset = PBL_IF_ROUND_ELSE(MENU_CELL_ROUND_FOCUSED_HORIZONTAL_INSET,
-                                      menu_cell_basic_horizontal_inset());
+  const int inset =
+      PBL_IF_ROUND_ELSE(MENU_CELL_ROUND_FOCUSED_HORIZONTAL_INSET, prv_horizontal_inset(aml));
   // Tintin has a rounded rectangle highlight
   box = grect_inset_internal(box, PBL_IF_COLOR_ELSE(inset, 2 * inset), 0);
 
@@ -324,7 +354,7 @@ static int16_t prv_get_item_line_height(ActionMenuLayer *aml, int idx) {
   // On rectangular displays, if the indicator is present, the indicator also will be offset,
   // so we add another nudge between the text and the indicator.
 #if PBL_RECT
-  const int nudge = menu_cell_basic_horizontal_inset();
+  const int nudge = prv_horizontal_inset(aml);
   if (!item->is_leaf) {
     const GSize indicator_size = graphics_text_layout_get_max_used_size(
         ctx, INDICATOR, font, box, GTextOverflowModeWordWrap, GTextAlignmentRight, nullptr);
@@ -460,7 +490,7 @@ static void prv_cell_item_content_draw_rect(GContext *ctx, const Layer *cell_lay
                                             const ActionMenuLayer *aml, const ActionMenuItem *item,
                                             bool selected, GRect *content_box) {
   char *indicator = nullptr;
-  const int16_t horizontal_padding = menu_cell_basic_horizontal_inset();
+  const int16_t horizontal_padding = prv_horizontal_inset(aml);
   const GFont font = aml->layout_cache.font;
   if (!item->is_leaf) {
     // If an item is not a leaf, then there would be an indicator when it is focused.  Either
@@ -495,6 +525,11 @@ static void prv_cell_item_content_draw_rect(GContext *ctx, const Layer *cell_lay
   content_box->size.h -= (2 * y_padding);
 #endif
 
+  // The basic cell insets by the system size's margin; make up the difference to ours
+  const int16_t inset_delta = horizontal_padding - menu_cell_basic_horizontal_inset();
+  content_box->origin.x += inset_delta;
+  content_box->size.w -= (2 * inset_delta);
+
   // Cast the cell layer so we can briefly modify its bounds. We do this because we're
   // desperate for stack space and we understand the call hierarchy. We'll restore the state below.
   Layer *mutable_cell_layer = (Layer *)cell_layer;
@@ -520,7 +555,7 @@ static void prv_cell_item_content_draw_round(GContext *ctx, const Layer *cell_la
   *content_box = grect_inset(*content_box, GEdgeInsets(0, horizontal_inset));
 
   // Use a smaller font for the unfocused cells to achieve a fish-eye effect
-  const GFont font = selected ? aml->layout_cache.font : prv_get_unfocused_item_font();
+  const GFont font = selected ? aml->layout_cache.font : prv_get_unfocused_item_font(aml);
   const GTextOverflowMode overflow_mode =
       selected ? GTextOverflowModeWordWrap : GTextOverflowModeTrailingEllipsis;
   const GTextAlignment text_alignment = GTextAlignmentCenter;
@@ -881,14 +916,13 @@ static int16_t prv_get_cell_padding(ActionMenuLayer *aml) {
   const int16_t default_sep_height = 10;
 #if PBL_ROUND
   // when showing columns, set cells further apart
-  return prv_aml_is_short(aml) ? default_sep_height : 1;
+  return prv_aml_is_short(aml) ? default_sep_height - SHORT_CELL_EXTRA : 1;
 #elif CONFIG_SCREEN_COLOR_DEPTH_BITS == 1
   return default_sep_height;
 #else
   const int16_t line_height = fonts_get_font_height(aml->layout_cache.font);
-  const int16_t sep_height =
-      MAX(menu_cell_small_cell_height() - line_height, default_sep_height) + 1;
-  return sep_height;
+  const int16_t sep_height = MAX(prv_small_cell_height(aml) - line_height, default_sep_height) + 1;
+  return prv_aml_is_short(aml) ? sep_height - SHORT_CELL_EXTRA : sep_height;
 #endif
 }
 
@@ -902,7 +936,7 @@ static int16_t prv_get_cell_height_cb(struct MenuLayer *menu_layer, MenuIndex *c
       const int rows = PBL_IF_ROUND_ELSE(3, 1);
       return rows * GLYPH_CELL_SIZE + (rows - 1) * GLYPH_CELL_GAP;
     }
-    return line_height;
+    return line_height + SHORT_CELL_EXTRA;
   }
 
 #if PBL_ROUND
@@ -960,7 +994,7 @@ static void prv_draw_separator_cb(GContext *ctx, const Layer *cell_layer, MenuIn
 
     const int16_t separator_width = config->separator.w;
     const GRect *cell_layer_bounds = &cell_layer->bounds;
-    const int16_t offset_x = PBL_IF_RECT_ELSE(menu_cell_basic_horizontal_inset() + 1,
+    const int16_t offset_x = PBL_IF_RECT_ELSE(prv_horizontal_inset(aml) + 1,
                                               (cell_layer->bounds.size.w - separator_width) / 2);
     const int16_t offset_y = (cell_layer_bounds->size.h / 2) + nudge_down;
     GPoint separator_start_point =
@@ -1085,7 +1119,7 @@ static void prv_update_aml_cache(ActionMenuLayer *aml, int selected_index) {
   prv_unschedule_item_animation(aml);
 #if GLYPH_GRID_SUPPORTED
   aml->layout_cache.font = prv_is_glyph_grid(aml) ? fonts_get_system_font(FONT_KEY_GOTHIC_28_EMOJI)
-                                                  : prv_get_item_font();
+                                                  : prv_get_item_font(aml);
 #endif
 
   if (aml->layout_cache.item_heights != nullptr) {
@@ -1151,7 +1185,8 @@ void action_menu_layer_init(ActionMenuLayer *aml, const GRect *frame) {
   // Since menu_layer_set_callbacks() will call the menu functions, we need to initialize
   // the ActionMenuLayer attributes before setting the callbacks onto the menu.
   aml->item_animation = (ActionMenuItemAnimation){};
-  aml->layout_cache = (ActionMenuLayoutCache){.font = prv_get_item_font()};
+  aml->content_size = NumPreferredContentSizes;
+  aml->layout_cache = (ActionMenuLayoutCache){.font = prv_get_item_font(aml)};
   aml->callbacks = (ActionMenuLayerCallbacks){};
   aml->layer.property_changed_proc = prv_changed_proc;
   aml->layer.update_proc = prv_update_proc;
@@ -1245,6 +1280,11 @@ void action_menu_layer_set_items(ActionMenuLayer *aml, const ActionMenuItem *ite
 
 void action_menu_layer_set_glyph_grid(ActionMenuLayer *aml, bool glyph_grid) {
   aml->glyph_grid = glyph_grid;
+}
+
+void action_menu_layer_set_content_size(ActionMenuLayer *aml, PreferredContentSize size) {
+  aml->content_size = size;
+  aml->layout_cache.font = prv_get_item_font(aml);
 }
 
 void action_menu_layer_set_short_items(ActionMenuLayer *aml, const ActionMenuItem *items,
