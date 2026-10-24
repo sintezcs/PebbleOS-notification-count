@@ -177,10 +177,11 @@ typedef enum {
 // .minor:0x6a -- Add HRV sampling API (health_service_set_hrv_sample_period) (rev 109)
 // sdk.major:0x5 .minor:0x6b -- 24-bit app load and virtual sizes (no API changes) (rev 109)
 
-// sdk.major:0x5 .minor:0x6c -- Watch notification count (rev 110)
+// sdk.major:0x5 .minor:0x6e -- Private watch notification count (rev 112)
+// Minors 0x6c-0x6d and revisions 110-111 are reserved by upstream main.
 
 #define PROCESS_INFO_CURRENT_SDK_VERSION_MAJOR 0x5
-#define PROCESS_INFO_CURRENT_SDK_VERSION_MINOR 0x6c
+#define PROCESS_INFO_CURRENT_SDK_VERSION_MINOR 0x6e
 
 // The first SDK to ship with 2.x APIs
 #define PROCESS_INFO_FIRST_2X_SDK_VERSION_MAJOR 0x4
