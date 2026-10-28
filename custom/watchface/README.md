@@ -12,7 +12,7 @@ Inverted colors, and 24-hour time with seconds instead of the temperature:
 
 Version 1.4.1 (custom notification-count build). Pebble Time 2 only (platform
 `emery`, 200x228 screen). **Requires the accompanying modified PebbleOS firmware
-and its generated SDK, revision 112 (process SDK 5.0x6e).** This `.pbw` cannot run
+and its generated SDK, revision 113 (process SDK 5.0x6f).** This `.pbw` cannot run
 on stock firmware, even when the new setting is off.
 
 The Bottom bezel setting **Show notifications** is off by default.
