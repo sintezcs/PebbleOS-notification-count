@@ -2,8 +2,8 @@
   "upstream_repository": "coredevices/PebbleOS",
   "fork_repository": "sintezcs/PebbleOS-notification-count",
   "maintenance_branch": "codex/notification-count",
-  "base_tag": "v4.44.0",
-  "base_commit": "4f874566a946925764430a7ba23dda83d5ae4c37",
+  "base_tag": "v4.44.1",
+  "base_commit": "a2f825e96d0a5ff5bef15e0cc61710e60cbb4276",
   "hardware": "obelix_pvt",
   "platform": "emery",
   "watchface_version": "1.4.1",
@@ -11,6 +11,6 @@
   "private_sdk_major": 5,
   "private_sdk_minor": 111,
   "private_export_revision": 113,
-  "last_verified_custom_release": "v4.43.0-notifications.1",
+  "last_verified_custom_release": "v4.44.0-notifications.1",
   "last_failure_fingerprint": null
 }

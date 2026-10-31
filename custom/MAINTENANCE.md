@@ -21,7 +21,7 @@ Fetch only needed source/submodules. Rebase the notification API and custom tool
 onto that exact tag, resolving changed source paths and code deliberately. Update
 state's base tag/commit and allocate the private export revision after upstream's
 last revision. Choose a private SDK minor above the upstream minor and any already
-reserved minor. For v4.44.0, upstream contains revisions through 111 and minor 0x6d.
+reserved minor. For v4.44.1, upstream contains revisions through 111 and minor 0x6d.
 This build retains private revision 113 and SDK minor 0x6f, preserving the
 v4.43.0 private ABI. Do not blindly reuse
 these values when upstream changes. Verify the official symbol
