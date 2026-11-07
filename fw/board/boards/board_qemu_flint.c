@@ -4,9 +4,11 @@
 #include <pbl/drivers/ambient/qemu.h>
 #include <pbl/drivers/backlight/qemu.h>
 #include <pbl/drivers/display/qemu.h>
+#include <pbl/drivers/flash/qemu.h>
 #include <pbl/drivers/gpio/qemu.h>
 #include <pbl/drivers/imu/qemu.h>
 #include <pbl/drivers/input/gpio_keys.h>
+#include <pbl/drivers/rtc/qemu.h>
 #include <pbl/drivers/temperature/qemu.h>
 #include <pbl/drivers/vibe/qemu.h>
 #include <pbl/kernel/irq.h>
@@ -19,7 +21,7 @@
 #include <pbl/drivers/uart/qemu.h>
 
 PBL_UART_QEMU_DEFINE(s_uart2, "uart2", QEMU_UART2_BASE, PBL_IRQN(UART2), 115200);
-const struct pbl_uart *const DBG_UART = &s_uart2.uart;
+const struct pbl_uart *const CONSOLE_UART = &s_uart2.uart;
 
 // QEMU control protocol UART (UART1)
 PBL_UART_QEMU_DEFINE(s_uart1, "uart1", QEMU_UART1_BASE, PBL_IRQN(UART1), 115200);
@@ -35,17 +37,6 @@ PBL_DISPLAY_QEMU_DEFINE(s_display, "display", QEMU_DISPLAY_BASE, QEMU_DISPLAY_FB
                         PBL_DISPLAY_FORMAT_MONO);
 
 const struct pbl_display *const DISPLAY = &s_display.disp;
-
-const BoardConfigPower BOARD_CONFIG_POWER = {
-  .low_power_threshold = 2U,
-  .battery_capacity_hours = 168U,
-};
-
-const BoardConfig BOARD_CONFIG = {
-  .backlight_on_percent = 100,
-  .ambient_light_dark_threshold = 150,
-  .ambient_k_delta_threshold = 25,
-};
 
 PBL_GPIO_KEYS_DEFINE(BUTTONS, "buttons",
                      PBL_GPIO_KEYS_KEY("Back", PBL_GPIO(QEMU_GPIO, 0, 0), PBL_INPUT_KEY_BACK, 0),
@@ -93,3 +84,7 @@ const struct pbl_backlight *const BACKLIGHT = QEMU_BACKLIGHT;
 const struct pbl_vibe *const VIBE = QEMU_VIBE;
 
 const struct pbl_temp *const DIE_TEMP = QEMU_TEMP;
+
+const struct pbl_rtc *const RTC = QEMU_RTC;
+
+const struct pbl_flash *const FLASH = QEMU_FLASH;
