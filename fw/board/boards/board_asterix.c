@@ -5,7 +5,7 @@
 #include <pbl/drivers/audio.h>
 #include <pbl/drivers/backlight/pwm.h>
 #include <pbl/drivers/display/sharp_ls013b7dh01.h>
-#include <pbl/drivers/flash/qspi_flash_definitions.h>
+#include <pbl/drivers/flash/spi_nor.h>
 #include <pbl/drivers/i2c.h>
 #include <pbl/drivers/i2c/nrf5.h>
 #include <pbl/drivers/imu/lsm6dso/lsm6dso.h>
@@ -16,54 +16,43 @@
 #include <pbl/drivers/pmic/npm1300.h>
 #include <pbl/drivers/pwm/nrf5.h>
 #include <pbl/drivers/pwm/nrf5_rtc.h>
-#include <pbl/drivers/qspi_definitions.h>
 #include <pbl/drivers/regulator/npm1300.h>
-#include <pbl/drivers/rtc.h>
+#include <pbl/drivers/rtc/retained.h>
 #include <pbl/drivers/speaker/nrf5/da7212_definitions.h>
 #include <pbl/drivers/spi/nrf5.h>
+#include <pbl/drivers/spi_mem/nrf5_qspi.h>
 #include <pbl/drivers/temperature/nrf5.h>
 #include <pbl/drivers/uart/nrf5.h>
 #include <pbl/drivers/vibe/drv2604.h>
 #include <pbl/kernel/irq.h>
 #include <pbl/logging/logging.h>
+#include <pbl/util/size.h>
 
 #include <board/board.h>
+#include <board/otp_layout.h>
 #include <flash_region/flash_region.h>
-#include <nrfx_i2s.h>
-
-// QSPI
 #include <hal/nrf_clock.h>
 #include <hal/nrf_gpio.h>
+#include <nrfx_i2s.h>
 #include <nrfx_pdm.h>
 
-static QSPIPortState s_qspi_port_state;
-static QSPIPort QSPI_PORT = {
-  .state = &s_qspi_port_state,
-  .clk_freq_hz = 8000000UL,
-  .cs_gpio = NRF_GPIO_PIN_MAP(0, 17),
-  .clk_gpio = NRF_GPIO_PIN_MAP(0, 19),
-  .data_gpio = {
-    NRF_GPIO_PIN_MAP(0, 20),
-    NRF_GPIO_PIN_MAP(0, 21),
-    NRF_GPIO_PIN_MAP(0, 22),
-    NRF_GPIO_PIN_MAP(0, 23),
-  },
-};
-QSPIPort *const QSPI = &QSPI_PORT;
+PBL_SPI_MEM_NRF5_QSPI_DEFINE(s_qspi, "qspi", 8000000, PBL_GPIO(NRF5_GPIO_P0, 19, 0),
+                             PBL_GPIO(NRF5_GPIO_P0, 17, 0), PBL_GPIO(NRF5_GPIO_P0, 20, 0),
+                             PBL_GPIO(NRF5_GPIO_P0, 21, 0), PBL_GPIO(NRF5_GPIO_P0, 22, 0),
+                             PBL_GPIO(NRF5_GPIO_P0, 23, 0));
+PBL_IRQ_CONNECT(QSPI, 5, pbl_spi_mem_nrf5_qspi_irq_handler, &s_qspi, 0);
 
-static QSPIFlashState s_qspi_flash_state;
-static QSPIFlash QSPI_FLASH_DEVICE = {
-  .state = &s_qspi_flash_state,
-  .qspi = &QSPI_PORT,
-  .read_mode = QSPI_FLASH_READ_READ4IO,
-  .write_mode = QSPI_FLASH_WRITE_PP4O,
-};
-QSPIFlash *const QSPI_FLASH = &QSPI_FLASH_DEVICE;
+static const struct pbl_flash_otp_cell s_otp_cells[] = {BOARD_OTP_CELLS};
+static const struct pbl_flash_otp_layout s_otp_layout = {s_otp_cells, ARRAY_LENGTH(s_otp_cells)};
+PBL_FLASH_SPI_NOR_DEFINE(s_flash, "flash", &s_qspi.mem, &pbl_flash_nor_gd25lq255e,
+                         FLASH_REGION_BASE_ADDRESS, &s_otp_layout);
+
+const struct pbl_flash *const FLASH = &s_flash.flash;
 /* PERIPHERAL ID 43 */
 
 PBL_UART_NRF5_DEFINE(s_uart0, "uart0", 0, 1000000, PBL_GPIO(NRF5_GPIO_P0, 27, 0),
                      PBL_GPIO(NRF5_GPIO_P0, 5, 0), 2, nullptr);
-const struct pbl_uart *const DBG_UART = &s_uart0.uart;
+const struct pbl_uart *const CONSOLE_UART = &s_uart0.uart;
 PBL_IRQ_CONNECT(UART0_UARTE0, 7, pbl_uart_nrf5_irq_handler, &s_uart0, 0);
 /* PERIPHERAL ID 8 */
 
@@ -85,11 +74,15 @@ PBL_SPI_NRF5_DEFINE(s_spi3, "spi3", 3, PBL_GPIO(NRF5_GPIO_P0, 6, 0), PBL_GPIO(NR
                     PBL_GPIO(nullptr, 0, 0), nullptr, PBL_GPIO(NRF5_GPIO_P1, 3, 0));
 PBL_IRQ_CONNECT(SPIM3, 7, pbl_spi_nrf5_irq_handler, &s_spi3, 0);
 
+// Tinted rounded corners on the glass
+static const uint8_t s_display_corners[] = {3, 1, 1};
+
 // EXTCOMIN feeds a flip-flop, generating a 60 Hz 50% VCOM
 PBL_DISPLAY_SHARP_LS013B7DH01_DEFINE(
     s_display, "display",
     PBL_SPI_DEV(&s_spi3.bus, 0, 1000000, PBL_SPI_MODE_0 | PBL_SPI_CS_HIGH | PBL_SPI_LSB_FIRST),
-    PBL_GPIO(NRF5_GPIO_P0, 4, 0), PBL_PWM(&s_extcomin.ctrl, 0, PBL_PWM_HZ(120), 0), false);
+    PBL_GPIO(NRF5_GPIO_P0, 4, 0), PBL_PWM(&s_extcomin.ctrl, 0, PBL_PWM_HZ(120), 0), false,
+    .corners = s_display_corners, .num_corners = ARRAY_LENGTH(s_display_corners));
 
 const struct pbl_display *const DISPLAY = &s_display.disp;
 
@@ -203,8 +196,6 @@ PBL_BACKLIGHT_PWM_DEFINE(s_backlight, .enable = PBL_GPIO(NRF5_GPIO_P1, 8, 0),
 
 const struct pbl_backlight *const BACKLIGHT = &s_backlight.backlight;
 
-PBL_IRQ_CONNECT(RTC1, 7, rtc_irq_handler, , 0);
-
 const Npm1300Config NPM1300_CONFIG = {
   // 128mA = ~1C (rapid charge)
   .chg_current_ma = 128,    .dischg_limit_ma = 200, .term_current_pct = 10,  .vterm_mv = 4200,
@@ -232,3 +223,5 @@ void board_init(void) {
 }
 
 const struct pbl_temp *const DIE_TEMP = NRF5_TEMP;
+
+const struct pbl_rtc *const RTC = RETAINED_RTC;
