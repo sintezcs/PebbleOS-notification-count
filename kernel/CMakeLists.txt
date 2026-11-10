@@ -10,6 +10,8 @@ pbl_library_sources(
   init.c
   irq.c
   malloc.c
+  mpu.c
+  mpu_region.c
   msgq.c
   mutex.c
   poll.c
@@ -22,6 +24,9 @@ pbl_library_sources(
   time.c
   timekeeping.c
   timer.c
+  wallclock.c
+  sys_work.c
+  work.c
 )
 # The heap poisons what it hands out but walks its own memory freely.
 if(CONFIG_ASAN)

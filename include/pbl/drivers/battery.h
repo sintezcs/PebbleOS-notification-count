@@ -38,8 +38,33 @@ typedef struct BatteryConstants {
   int32_t t_mc;
 } BatteryConstants;
 
+/**
+ * @brief Handler of USB power connection changes.
+ *
+ * Called from a system work queue.
+ *
+ * @param is_connected What battery_is_usb_connected() reports.
+ */
+typedef void (*battery_connection_handler_t)(bool is_connected);
+
 /** @brief Initialize the battery driver. */
 void battery_init(void);
+
+/**
+ * @brief Set the handler called when USB power is connected or removed.
+ *
+ * Changes are not reported while there is no handler.
+ *
+ * @param handler Handler, or NULL for none.
+ */
+void battery_set_connection_handler(battery_connection_handler_t handler);
+
+/**
+ * @brief Report a USB power connection change to the handler.
+ *
+ * For drivers, from thread context.
+ */
+void battery_connection_changed(void);
 
 /**
  * @brief Measure the battery voltage.
@@ -129,5 +154,22 @@ void battery_force_charge_enable(bool is_charging);
  * @retval negative Error code on failure.
  */
 int battery_charge_status_get(BatteryChargeStatus *status);
+
+/**
+ * @brief Request a high discharge current, e.g. for the speaker.
+ *
+ * Requests nest: the battery may supply a high current until each request is released. Provided
+ * by drivers that select @c BATTERY_HIGH_LOAD.
+ *
+ * @return 0 or a negative errno.
+ */
+int battery_high_load_request(void);
+
+/**
+ * @brief Release a request made with battery_high_load_request().
+ *
+ * @return 0 or a negative errno.
+ */
+int battery_high_load_release(void);
 
 /** @} */

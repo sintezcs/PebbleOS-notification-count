@@ -12,25 +12,25 @@ add_executable(pdc2png
   ${PBL_BASE}/third_party/uzlib/uzlib/src/tinflate.c
   ${PBL_BASE}/third_party/uzlib/uzlib/src/adler32.c
   ${PBL_BASE}/third_party/uzlib/uzlib/src/crc32.c
-  ${PBL_BASE}/fw/applib/graphics/8_bit/bitblt_private.c
-  ${PBL_BASE}/fw/applib/graphics/8_bit/framebuffer.c
-  ${PBL_BASE}/fw/applib/graphics/bitblt.c
-  ${PBL_BASE}/fw/applib/graphics/framebuffer.c
-  ${PBL_BASE}/fw/applib/graphics/gbitmap.c
-  ${PBL_BASE}/fw/applib/graphics/gbitmap_png.c
-  ${PBL_BASE}/fw/applib/graphics/gcolor_definitions.c
-  ${PBL_BASE}/fw/applib/graphics/gdraw_command.c
-  ${PBL_BASE}/fw/applib/graphics/gdraw_command_frame.c
-  ${PBL_BASE}/fw/applib/graphics/gdraw_command_image.c
-  ${PBL_BASE}/fw/applib/graphics/gdraw_command_list.c
-  ${PBL_BASE}/fw/applib/graphics/gdraw_command_sequence.c
-  ${PBL_BASE}/fw/applib/graphics/gpath.c
-  ${PBL_BASE}/fw/applib/graphics/graphics.c
-  ${PBL_BASE}/fw/applib/graphics/graphics_circle.c
-  ${PBL_BASE}/fw/applib/graphics/graphics_line.c
-  ${PBL_BASE}/fw/applib/graphics/graphics_private.c
-  ${PBL_BASE}/fw/applib/graphics/graphics_private_raw.c
-  ${PBL_BASE}/fw/applib/graphics/gtypes.c
+  ${PBL_BASE}/pebble/applib/graphics/8_bit/bitblt_private.c
+  ${PBL_BASE}/pebble/applib/graphics/8_bit/framebuffer.c
+  ${PBL_BASE}/pebble/applib/graphics/bitblt.c
+  ${PBL_BASE}/pebble/applib/graphics/framebuffer.c
+  ${PBL_BASE}/pebble/applib/graphics/gbitmap.c
+  ${PBL_BASE}/pebble/applib/graphics/gbitmap_png.c
+  ${PBL_BASE}/pebble/applib/graphics/gcolor_definitions.c
+  ${PBL_BASE}/pebble/applib/graphics/gdraw_command.c
+  ${PBL_BASE}/pebble/applib/graphics/gdraw_command_frame.c
+  ${PBL_BASE}/pebble/applib/graphics/gdraw_command_image.c
+  ${PBL_BASE}/pebble/applib/graphics/gdraw_command_list.c
+  ${PBL_BASE}/pebble/applib/graphics/gdraw_command_sequence.c
+  ${PBL_BASE}/pebble/applib/graphics/gpath.c
+  ${PBL_BASE}/pebble/applib/graphics/graphics.c
+  ${PBL_BASE}/pebble/applib/graphics/graphics_circle.c
+  ${PBL_BASE}/pebble/applib/graphics/graphics_line.c
+  ${PBL_BASE}/pebble/applib/graphics/graphics_private.c
+  ${PBL_BASE}/pebble/applib/graphics/graphics_private_raw.c
+  ${PBL_BASE}/pebble/applib/graphics/gtypes.c
   ${PBL_BASE}/lib/util/gmtime.c
   ${PBL_BASE}/lib/util/keyed_circular_cache.c
   ${PBL_BASE}/lib/util/math.c
@@ -41,7 +41,7 @@ add_executable(pdc2png
   ${PBL_BASE}/tests/stubs/default/applib_resource.c
   ${PBL_BASE}/tests/stubs/default/heap.c
   ${PBL_BASE}/tests/stubs/default/logging.c
-  ${PBL_BASE}/tests/stubs/default/memory_layout.c
+  ${PBL_BASE}/tests/stubs/default/process_regions.c
   ${PBL_BASE}/tests/stubs/default/pbl_malloc.c
   ${PBL_BASE}/tests/stubs/default/resources.c
   ${PBL_BASE}/tests/stubs/default/syscalls.c
@@ -49,7 +49,7 @@ add_executable(pdc2png
 
 target_include_directories(pdc2png PRIVATE
   ${PBL_BASE}/tests/stubs
-  ${PBL_BASE}/tests/fw/graphics
+  ${PBL_BASE}/tests/pebble/graphics
   ${PBL_BASE}/third_party/upng
   ${PBL_BASE}/third_party/upng/upng
   ${PBL_BASE}/third_party/uzlib/uzlib/src
@@ -57,10 +57,8 @@ target_include_directories(pdc2png PRIVATE
   ${PBL_BASE}/include
   ${PBL_BASE}/kernel/arch/posix/include
   ${PBL_BASE}/subsys
-  ${PBL_BASE}/fw
+  ${PBL_BASE}/pebble
 )
-
-target_compile_options(pdc2png PRIVATE -include${PBL_BASE}/fw/board/display_platform.h)
 
 # pdc2png resolves pbi2png against its own directory, so it gets a copy.
 add_custom_command(TARGET pdc2png POST_BUILD

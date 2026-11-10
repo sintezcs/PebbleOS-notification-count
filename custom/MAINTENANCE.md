@@ -21,10 +21,11 @@ Fetch only needed source/submodules. Rebase the notification API and custom tool
 onto that exact tag, resolving changed source paths and code deliberately. Update
 state's base tag/commit and allocate the private export revision after upstream's
 last revision. Choose a private SDK minor above the upstream minor and any already
-reserved minor. For v4.45.0, upstream contains revisions through 113 and minor 0x6f.
-The private count moves after the new microphone bounds and dark mode exports,
-to revision 114 and SDK minor 0x70. Install the paired rebuilt PBW; the previous
-private ABI is incompatible. Do not blindly reuse these values when upstream changes. Verify the official symbol
+reserved minor. For v4.46.0, upstream contains revisions through 113 and minor 0x6f.
+The private count remains at revision 114 and SDK minor 0x70, preserving the
+v4.45.0 private ABI. Firmware and storage tests now live under pebble/ and
+tests/pebble/. CI uses the upstream v11 build container. Do not blindly reuse
+these values when upstream changes. Verify the official symbol
 prefix is unchanged and the count API is appended, not inserted in existing ABI.
 
 If upstream has an equivalent official API, check retained/read/deleted semantics

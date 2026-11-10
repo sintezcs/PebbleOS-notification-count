@@ -4,14 +4,50 @@
 menu "Bluetooth"
 
 config BT
-    bool
-    default y
+    bool "Bluetooth"
     select MBEDTLS
+    select TASK_WDT
     help
       The Bluetooth subsystem: the NimBLE host and the PebbleOS glue
       around it.
 
 if BT
+
+config BT_VENDOR_ID
+    hex "Vendor ID"
+    default 0x0EEA
+    help
+      Company identifier in the manufacturer data of advertisements.
+
+config BT_VENDOR_NAME
+    string "Vendor name"
+    default "Core Devices LLC"
+    help
+      Manufacturer name in the Device Information Service.
+
+config BT_HOST_THREAD_STACK_SIZE
+    int "Host thread stack size in bytes"
+    default 5000
+
+config BT_HOST_THREAD_PRIO
+    int "Host thread priority"
+    default 3
+
+config BT_LL_THREAD_STACK_SIZE
+    int "Link layer thread stack size in bytes"
+    default 1384
+
+config BT_LL_THREAD_PRIO
+    int "Link layer thread priority"
+    default 4
+
+config BT_HCI_THREAD_STACK_SIZE
+    int "HCI transport thread stack size in bytes"
+    default 1024
+
+config BT_HCI_THREAD_PRIO
+    int "HCI transport thread priority"
+    default 3
 
 choice BT_HCI
     prompt "HCI transport"
@@ -68,7 +104,7 @@ config BT_ID_ADDR_CONTROLLER
 
 config BT_ID_ADDR_SF32LB52_EFUSE
     bool "SF32LB52 eFUSE"
-    depends on SOC_SF32LB52
+    depends on NVMEM_SF32LB52
     select BT_ID_ADDR
     help
       Public address derived from the unique ID in the SoC's eFUSE.

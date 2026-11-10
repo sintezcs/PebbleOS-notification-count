@@ -2,6 +2,7 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 
 #ifdef CONFIG_USERSPACE
+#include "arm_mpu.h"
 #include "arm_syscall.h"
 #endif
 
@@ -9,8 +10,8 @@
 #include <string.h>
 
 #include <pbl/kernel/compiler.h>
+#include <pbl/kernel/section.h>
 #include <pbl/mcu/interrupts.h>
-#include <pbl/mcu/mpu.h>
 
 #include <cmsis_core.h>
 #include <kernel.h>
@@ -27,12 +28,10 @@
 #define HAS_PSPLIM 0
 #endif
 
-#define NUM_MPU_REGIONS 4
-#ifdef CONFIG_SOC_SF32LB52
-#define FIRST_MPU_REGION 8
-#else
-#define FIRST_MPU_REGION 4
-#endif
+#define FIRST_MPU_REGION (CONFIG_KERNEL_MPU_REGIONS - ARCH_THREAD_MPU_REGIONS)
+
+// The context switch writes the slots through the RBAR aliases.
+static_assert(FIRST_MPU_REGION % ARCH_THREAD_MPU_REGIONS == 0, "thread slots must be aligned");
 
 #define SVC_START           0
 #define SVC_YIELD           1
@@ -51,7 +50,11 @@
 #define SHPR_SVCALL 7
 #define SHPR_PENDSV 10
 
-struct pbl_thread *pbl_cur PBL_SECTION(".kernel_unpriv_ro_bss");
+struct pbl_thread *pbl_cur KERNEL_READONLY_DATA;
+
+void arch_cur_set(struct pbl_thread *t) {
+  pbl_mpu_user_ro_write(&pbl_cur, &t, sizeof(t));
+}
 
 //! Saved context, lowest address first. Matches the layout core dump tooling
 //! learned from the FreeRTOS port so the canonical register walk is unchanged.
@@ -111,7 +114,6 @@ const struct pbl_kernel_debug_layout pbl_kernel_debug_layout PBL_USED = {
 
 static_assert(offsetof(struct pbl_thread, backend.sp) == 0, "saved SP must be first");
 static_assert(offsetof(struct pbl_thread, backend.arch.mpu) == 4, "MPU words must follow the SP");
-static_assert(NUM_MPU_REGIONS == PBL_THREAD_MAX_MEM_REGIONS, "region count mismatch");
 
 static inline bool prv_fp_active(uint32_t exc_return) {
   return (exc_return & EXC_RETURN_FP_INACTIVE) == 0;
@@ -132,7 +134,7 @@ void arch_thread_init(struct pbl_thread *t, void (*entry)(void *), void *arg) {
 #else
   ctx->control = CONTROL_PRIVILEGED;
 #endif
-#if HAS_PSPLIM
+#if HAS_PSPLIM && defined(CONFIG_KERNEL_STACK_GUARD)
   ctx->psplim = (uint32_t)t->stack;
 #endif
   ctx->exc_return = INITIAL_EXC_RETURN;
@@ -148,23 +150,16 @@ void arch_thread_init(struct pbl_thread *t, void (*entry)(void *), void *arg) {
 // so no RNR write is needed per region. An empty slot must still carry them:
 // an RBAR write with VALID clear lands on whatever region RNR last selected,
 // i.e. it would wipe the slot programmed just before it.
-void arch_thread_regions_set(struct pbl_thread *t, const MpuRegion *const *regions) {
-  for (unsigned int i = 0; i < NUM_MPU_REGIONS; i++) {
-    const MpuRegion *r = regions ? regions[i] : nullptr;
+void arch_thread_regions_set(struct pbl_thread *t, const struct pbl_mpu_region *const *regions) {
+  for (unsigned int i = 0; i < ARCH_THREAD_MPU_REGIONS; i++) {
+    const struct pbl_mpu_region *r = regions[i];
     uint32_t rbar = 0;
     uint32_t attr = 0;
 #ifndef CONFIG_ARMV8_M_MAINLINE
     rbar = MPU_RBAR_VALID_Msk | (FIRST_MPU_REGION + i);
 #endif
     if (r != nullptr) {
-      PBL_ASSERTN(r->region_num == FIRST_MPU_REGION + i);
-      uint32_t base_reg;
-      mpu_get_register_settings(r, &base_reg, &attr);
-#ifdef CONFIG_ARMV8_M_MAINLINE
-      rbar = base_reg;
-#else
-      rbar |= base_reg & ~(MPU_RBAR_VALID_Msk | MPU_RBAR_REGION_Msk);
-#endif
+      arm_mpu_region_encode(FIRST_MPU_REGION + i, r, &rbar, &attr);
     }
     t->backend.arch.mpu[2 * i] = rbar;
     t->backend.arch.mpu[2 * i + 1] = attr;
@@ -191,7 +186,7 @@ bool arch_in_isr(void) {
   return mcu_state_is_isr();
 }
 
-uint32_t arch_cycles_per_sec(void) {
+PBL_SECTION_RAM uint32_t arch_cycles_per_sec(void) {
   return SystemCoreClock;
 }
 
@@ -354,7 +349,7 @@ static uint32_t *prv_relocate_to_syscall_stack(uint32_t *frame, uint32_t exc_ret
   memcpy(dst, frame, frame_words * sizeof(uint32_t));
   dst[7] &= ~XPSR_STACK_PADDING;
 
-#if HAS_PSPLIM
+#if HAS_PSPLIM && defined(CONFIG_KERNEL_STACK_GUARD)
   __set_PSPLIM(base);
 #else
   (void)base;

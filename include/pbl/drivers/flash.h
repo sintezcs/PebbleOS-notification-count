@@ -11,21 +11,30 @@
 #include <pbl/kernel/mutex.h>
 #include <pbl/kernel/sem.h>
 #include <pbl/kernel/thread.h>
-#include <pbl/services/new_timer/new_timer.h>
+#include <pbl/kernel/work.h>
+
+// Program and erase units of the NOR parts in use, for sizes known at build time
+#define PAGE_SIZE_BYTES (0x100)
+
+#define SECTOR_SIZE_BYTES (0x10000)
+#define SECTOR_ADDR_MASK  (~(SECTOR_SIZE_BYTES - 1))
+
+#define SUBSECTOR_SIZE_BYTES (0x1000)
+#define SUBSECTOR_ADDR_MASK  (~(SUBSECTOR_SIZE_BYTES - 1))
 
 /**
  * @defgroup drivers_flash Flash
  * @ingroup drivers
  * @brief NOR flash class.
  *
- * A flash is a struct pbl_flash device. Addresses are absolute: they start at the device's
- * @c base, which is where the flash is memory-mapped on SoCs that map it. Writes only clear bits,
- * so the target range must be erased first. Erases work on whole subsectors: the class erases a
- * range with as few sector and subsector erases as it can, skipping the blank ones.
+ * A flash is a struct pbl_flash device. Addresses are offsets from its first byte, wherever the
+ * SoC maps it. Writes only clear bits, so the target range must be erased first. Erases work on
+ * whole subsectors: the class erases a range with as few sector and subsector erases as it can,
+ * skipping the blank ones.
  *
  * @code{.c}
  * static void prv_erased(int status, void *arg) {
- *   // Runs on the timer task: keep it short
+ *   // Runs on the high priority system work queue: keep it short
  * }
  *
  * ret = pbl_flash_erase(FLASH, addr, len);
@@ -59,7 +68,8 @@ struct pbl_flash;
 /**
  * @brief Completion callback of pbl_flash_erase_async().
  *
- * Runs from the timer task, or from the caller if there is nothing to erase, with no lock held:
+ * Runs on @ref pbl_sys_workq_high, or from the caller if there is nothing to erase, with no lock
+ * held:
  * it may start another erase.
  *
  * @param status 0 or a negative errno.
@@ -170,6 +180,7 @@ struct pbl_flash_ops {
 
 /** @cond INTERNAL_HIDDEN */
 struct pbl_flash_state {
+  const struct pbl_flash *flash;
   struct pbl_mutex lock;
   struct pbl_sem erase_sem;
   bool coredump;
@@ -192,8 +203,8 @@ struct pbl_flash_state {
     pbl_flash_erase_cb_t cb;
     void *arg;
   } erase;
-  TimerID poll_timer;
-  TimerID resume_timer;
+  struct pbl_delayed_work poll_timer;
+  struct pbl_delayed_work resume_timer;
   const uint8_t *map;
   uint32_t map_len;
 };
@@ -210,8 +221,6 @@ struct pbl_flash {
   const struct pbl_flash_ops *ops;
   /** Runtime state. */
   struct pbl_flash_state *state;
-  /** Address of the first byte. */
-  uint32_t base;
   /** Geometry. */
   const struct pbl_flash_geometry *geometry;
   /** OTP organization, or NULL. */
@@ -244,18 +253,16 @@ extern const struct pbl_flash *const FLASH;
  * @param _parent Parent device, e.g. the memory controller, or NULL.
  * @param _deps Dependencies from PBL_DEVICE_DEPS(), or NULL.
  * @param _ops Driver operations.
- * @param _base Address of the first byte.
  * @param _geometry Geometry.
  * @param _otp OTP organization, or NULL.
  * @param _otp_layout OTP cells, or NULL.
  */
-#define PBL_FLASH_INIT(sym, _name, _parent, _deps, _ops, _base, _geometry, _otp, _otp_layout)    \
+#define PBL_FLASH_INIT(sym, _name, _parent, _deps, _ops, _geometry, _otp, _otp_layout)           \
   {                                                                                              \
     .dev =                                                                                       \
         PBL_DEVICE_INIT_CLASS(sym, _name, pbl_flash_dev_init, _parent, _deps, &pbl_flash_class), \
     .ops = (_ops),                                                                               \
     .state = &sym##_flash_state,                                                                 \
-    .base = (_base),                                                                             \
     .geometry = (_geometry),                                                                     \
     .otp = (_otp),                                                                               \
     .otp_layout = (_otp_layout),                                                                 \

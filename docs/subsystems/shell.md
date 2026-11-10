@@ -58,18 +58,18 @@ PBL_SHELL_CMD_REGISTER(accel, sub_accel, "Accelerometer", NULL);
 `PBL_SHELL_DEFINE()` creates an instance bound to a backend. Every instance
 has its own line buffer and state, and commands receive the instance they
 run on, so their output goes back where the command came from. Commands of
-every instance run on KernelBG.
+every instance run on SysWorkq.
 
 - **Interactive** instances (with a prompt) feed received characters with
   `pbl_shell_input_from_isr()`. The core does line editing, echo, the prompt
-  and tab completion of command names on KernelBG.
+  and tab completion of command names on SysWorkq.
 - **Line** instances (no prompt) submit whole command lines with
   `pbl_shell_execute_line()`, and get a `done` callback when the command
   finishes.
 
-The firmware has two backends, both in `fw/console/`:
+The firmware's backend is `subsys/console/console.c`, interactive, on the
+{doc}`console`: the shell is always listening, and log lines print above the
+prompt, which comes back with the line being edited.
 
-- `shell_dbgserial.c`: interactive, on the debug serial. Ctrl-C switches
-  the serial port from logs to the shell, Ctrl-D back to logs.
-- `shell_pulse.c`: line-based, on the PULSE prompt protocol, which is what
-  `pbl console` talks to. Each output line is one prompt message.
+Release firmware has no shell: it needs `CONFIG_CONSOLE`, which is off there
+unless it is manufacturing firmware.

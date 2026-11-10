@@ -10,9 +10,6 @@
 #include <pbl/util/math.h>
 #include <pbl/util/size.h>
 
-#include <board/board.h>
-#include <kernel/util/idle.h>
-
 #ifdef CONFIG_SHELL
 #include <pbl/shell/shell.h>
 #endif
@@ -111,7 +108,6 @@ PBL_SECTION_RAM static void prv_deepsleep(void *arg) {
   if (clk_src == RCC_SYSCLK_DLL1) {
     HAL_RCC_HCPU_EnableDLL1(dll1_freq);
     HAL_RCC_HCPU_ClockSelect(RCC_CLK_MOD_SYS, RCC_SYSCLK_DLL1);
-    HAL_Delay_us(0);
   }
 }
 
@@ -137,10 +133,6 @@ static_assert(IDLE_WFI == SOC_SF32LB_WFI - 1 && IDLE_DEEPSLEEP == SOC_SF32LB_DEE
               "idle states follow the sleep levels");
 
 PBL_SECTION_RAM int pbl_soc_idle_state_limit(void) {
-  if (!idle_is_allowed()) {
-    return -1;
-  }
-
   // The debug flag forces plain WFI (deep WFI and deep sleep disabled).
   if (s_force_wfi) {
     return IDLE_WFI;

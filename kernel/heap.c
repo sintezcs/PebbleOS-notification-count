@@ -8,6 +8,8 @@
 #include <string.h>
 
 #include <pbl/kernel/assert.h>
+#include <pbl/kernel/compiler.h>
+#include <pbl/kernel/fatal.h>
 #include <pbl/kernel/heap.h>
 #include <pbl/logging/logging.h>
 #include <pbl/util/logging.h>
@@ -557,6 +559,11 @@ char *pbl_heap_strdup(struct pbl_heap *heap, const char *s, uintptr_t caller) {
   return dup;
 }
 
+[[noreturn]] PBL_WEAK void pbl_heap_oom_handler(struct pbl_heap *heap, size_t size,
+                                                uintptr_t caller) {
+  pbl_fatal_error_handler(caller);
+}
+
 [[noreturn]] void pbl_heap_oom(struct pbl_heap *heap, size_t size, uintptr_t caller) {
   unsigned int used = 0, free_bytes = 0, max_free = 0;
   pbl_heap_stats(heap, &used, &free_bytes, &max_free);
@@ -588,7 +595,7 @@ void pbl_heap_reset_high_water_mark(struct pbl_heap *heap) {
 // Serial Commands
 ///////////////////////////////////////////////////////////
 #ifdef CONFIG_MALLOC_INSTRUMENTATION
-void pbl_heap_dump(struct pbl_heap *heap) {
+void pbl_heap_dump(struct pbl_heap *heap, pbl_heap_dump_cb_t cb, void *arg) {
   char buffer[80];
   unsigned long num_free_blocks = 0;
   unsigned long num_free_bytes = 0;
@@ -622,35 +629,35 @@ void pbl_heap_dump(struct pbl_heap *heap) {
 
     snprintf(buffer, sizeof(buffer), "PC:0x%08lX Addr:0x%08lX Bytes:%-8lu %s", (long)pc,
              (long)&heap_iter->Data, block_size, type);
-    util_dbgserial_str(buffer);
+    cb(buffer, arg);
     heap_iter = get_next_block(heap, heap_iter);
   }
 
   snprintf(buffer, sizeof(buffer), "Heap start %p", heap->begin);
-  util_dbgserial_str(buffer);
+  cb(buffer, arg);
 
   snprintf(buffer, sizeof(buffer), "Heap end %p", heap->end);
-  util_dbgserial_str(buffer);
+  cb(buffer, arg);
 
   snprintf(buffer, sizeof(buffer), "Heap total size %zu", pbl_heap_size(heap));
-  util_dbgserial_str(buffer);
+  cb(buffer, arg);
 
   snprintf(buffer, sizeof(buffer), "Heap allocated %u", heap->current_size);
-  util_dbgserial_str(buffer);
+  cb(buffer, arg);
 
   snprintf(buffer, sizeof(buffer), "Heap high water mark %u", heap->high_water_mark);
-  util_dbgserial_str(buffer);
+  cb(buffer, arg);
 
   snprintf(buffer, sizeof(buffer), "Heap free blocks: %lu bytes, %lu blocks", num_free_bytes,
            num_free_blocks);
-  util_dbgserial_str(buffer);
+  cb(buffer, arg);
 
   snprintf(buffer, sizeof(buffer), "Heap alloc blocks: %lu bytes, %lu blocks", num_alloc_bytes,
            num_alloc_blocks);
-  util_dbgserial_str(buffer);
+  cb(buffer, arg);
 
   snprintf(buffer, sizeof(buffer), "Heap largest free block: %lu", largest_free);
-  util_dbgserial_str(buffer);
+  cb(buffer, arg);
 
   prv_unlock(heap);
 }
