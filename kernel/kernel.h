@@ -51,6 +51,9 @@ void sched_disinherit(struct pbl_thread *owner);
 //! Brings up the SoC, interrupts, faults and the heap, then runs @p entry.
 [[noreturn]] void kernel_init(int (*entry)(void));
 
+//! Starts the scheduler: creates the idle thread and switches to the highest priority thread.
+[[noreturn]] void pbl_kernel_start(void);
+
 //! Resets the interrupt lock nesting when the first thread starts.
 void irq_reset(void);
 
@@ -74,10 +77,27 @@ void timekeeping_start(void);
 void timekeeping_announce(void);
 //! Idles the CPU for up to @p ticks; call with every interrupt masked and idle confirmed.
 void timekeeping_idle(pbl_tick_t ticks);
+//! The uptime tick at which the wall clock reaches @p realtime_ms, rounded up. Interrupt lock held.
+uint64_t timekeeping_realtime_to_ticks(uint64_t realtime_ms);
+//! Realigns the wall clock work after the clock moved. Interrupt lock held.
+void wallclock_clock_set(uint64_t old_ms, uint64_t new_ms);
+void wallclock_reset_for_test(void);
 
 //! Runs the callbacks of the expired timers, from the tick ISR.
 void timer_expire(void);
 //! Ticks from @p now until the next timer expires, PBL_TICK_FOREVER if none.
-pbl_tick_t timer_ticks_until_next(pbl_tick_t now);
+pbl_tick_t timer_ticks_until_next(uint64_t now);
 void timer_reset_for_test(void);
+//! Starts the threads of the system work queues.
+void sys_workq_init(void);
+void sys_workq_reset_for_test(void);
 extern struct pbl_thread *pbl_all_threads;
+
+//! What the MPU slots of a thread hold, after its PBL_THREAD_MAX_MEM_REGIONS.
+#define THREAD_REGION_STACK_GUARD   PBL_THREAD_MAX_MEM_REGIONS
+#define THREAD_REGION_SYSCALL_GUARD (PBL_THREAD_MAX_MEM_REGIONS + 1)
+static_assert(THREAD_REGION_SYSCALL_GUARD + 1 == ARCH_THREAD_MPU_REGIONS,
+              "every thread slot must have a use");
+
+//! Takes over the MPU, adds the static regions it knows about and enables it.
+void mpu_init(void);

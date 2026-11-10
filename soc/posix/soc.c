@@ -9,7 +9,6 @@
 #include <pbl/kernel/sched.h>
 #include <pbl/util/size.h>
 
-#include <kernel/util/idle.h>
 #include <pbl_arch_posix.h>
 #include <posix_host.h>
 
@@ -37,7 +36,7 @@ const struct pbl_idle_state pbl_soc_idle_states[] = {
 const size_t pbl_soc_num_idle_states = ARRAY_LENGTH(pbl_soc_idle_states);
 
 int pbl_soc_idle_state_limit(void) {
-  return idle_is_allowed() ? 0 : -1;
+  return 0;
 }
 
 [[noreturn]] void pbl_soc_reset(void) {
@@ -45,6 +44,11 @@ int pbl_soc_idle_state_limit(void) {
 }
 
 void posix_fw_start(void) {
-  extern int pbl_fw_main(void);
-  pbl_posix_start(pbl_fw_main);
+  extern int pbl_app_main(void);
+  pbl_posix_start(pbl_app_main);
 }
+
+#ifndef CONFIG_SAMSA
+// Third-party apps are ARM binaries, which a native build cannot load.
+const void *const g_pbl_system_tbl[] = {0};
+#endif

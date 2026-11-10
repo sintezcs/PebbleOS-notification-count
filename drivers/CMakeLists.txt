@@ -2,8 +2,8 @@
 # SPDX-License-Identifier: Apache-2.0
 
 add_subdirectory(base)
-pbl_add_subdirectory_ifdef(CONFIG_SPEAKER speaker)
 pbl_add_subdirectory_ifdef(CONFIG_AMBIENT_LIGHT ambient)
+pbl_add_subdirectory_ifdef(CONFIG_AUDIO audio)
 pbl_add_subdirectory_ifdef(CONFIG_TEMPERATURE temperature)
 pbl_add_subdirectory_ifdef(CONFIG_BATTERY battery)
 pbl_add_subdirectory_ifdef(CONFIG_CLK clk)
@@ -20,7 +20,7 @@ pbl_add_subdirectory_ifdef(CONFIG_MBOX mbox)
 add_subdirectory(mcu)
 pbl_add_subdirectory_ifdef(CONFIG_MFD mfd)
 pbl_add_subdirectory_ifdef(CONFIG_BACKLIGHT backlight)
-pbl_add_subdirectory_ifdef(CONFIG_MIC mic)
+pbl_add_subdirectory_ifdef(CONFIG_NVMEM nvmem)
 pbl_add_subdirectory_ifdef(CONFIG_OTP otp)
 pbl_add_subdirectory_ifdef(CONFIG_PANEL panel)
 pbl_add_subdirectory_ifdef(CONFIG_PINCTRL pinctrl)

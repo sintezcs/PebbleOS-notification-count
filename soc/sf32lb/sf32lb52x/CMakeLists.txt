@@ -10,5 +10,8 @@ pbl_library_sources(
   syscfg.c
   idle.c
   lpsys.c
+  lpsys_halt.c
+  mpu_regions.c
 )
+pbl_library_sources_ifdef(CONFIG_COREDUMP coredump.c)
 pbl_linker_sources(ramfunc ramfunc.ld)

@@ -49,7 +49,7 @@ jobs:
       contents: read
 
     container:
-      image: ghcr.io/coredevices/pebbleos-docker:v10
+      image: ghcr.io/coredevices/pebbleos-docker:v11
 
     strategy:
       fail-fast: false
@@ -111,7 +111,7 @@ jobs:
             build/pebbleos.elf
             build/pebbleos.hex
             build/system_resources.pbpack
-            build/fw/loghash_dict.json
+            build/log.dict.json
             build/normal_*.pbz
 
   test:

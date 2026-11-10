@@ -24,7 +24,7 @@ jobs:
               - '.github/workflows/test.yml'
               - 'cmake/**'
               - 'drivers/**'
-              - 'fw/**'
+              - 'pebble/**'
               - 'include/**'
               - 'kernel/**'
               - 'lib/**'
@@ -44,7 +44,7 @@ jobs:
     if: needs.changes-test.outputs.should-test == 'true'
     runs-on: ubuntu-24.04
     container:
-      image: ghcr.io/coredevices/pebbleos-docker:v10
+      image: ghcr.io/coredevices/pebbleos-docker:v11
     steps:
       - name: Mark Github workspace as safe
         run: git config --system --add safe.directory "${GITHUB_WORKSPACE}" 
@@ -53,12 +53,16 @@ jobs:
         uses: actions/checkout@v7
         with:
           fetch-depth: 0
-          submodules: true
 
       - name: Rebase onto target branch
         uses: ./.github/actions/rebase
         with:
           submodules: true
+
+      - name: Restore the compiler cache
+        uses: ./.github/actions/ccache
+        with:
+          key: test
 
       - name: Install Python dependencies
         run: |
@@ -69,6 +73,14 @@ jobs:
         # ctest runs the whole suite before reporting, so one failure does
         # not hide the rest. The job still fails if anything failed.
         run: pbl test
+
+      - name: Save the compiler cache
+        uses: ./.github/actions/ccache-save
+        with:
+          key: test
+
+      - name: Run console host tests
+        run: python -m pytest tools/libs/pbl-console/tests
 
       - name: Publish Test Report
         uses: mikepenz/action-junit-report@v6

@@ -3,6 +3,7 @@
 
 menuconfig FLASH
     bool "Flash"
+    select TASK_WDT
     help
       Flash Drivers
 
@@ -46,6 +47,7 @@ config FLASH_POSIX
 
 config FLASH_SHELL
     bool "Shell commands"
+    default y if MFG
     default DRIVER_SHELL
     depends on SHELL
     help

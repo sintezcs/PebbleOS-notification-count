@@ -10,10 +10,8 @@
 #include <pbl/drivers/i2c.h>
 #include <pbl/drivers/intc.h>
 #include <pbl/kernel/compiler.h>
+#include <pbl/kernel/work.h>
 #include <pbl/mcu/cache.h>
-#include <pbl/services/regular_timer.h>
-
-#include <board/board.h>
 
 /**
  * @defgroup drivers_imu IMU
@@ -67,13 +65,15 @@ typedef struct LSM6DSOState {
   uint8_t raw_sample_buf[DCACHE_ROUND_UP(
       LSM6DSO_FIFO_SIZE * LSM6DSO_FIFO_WORD_SIZE_BYTES)] PBL_ALIGNED(DCACHE_LINE_SIZE_MAX);
   /** Watchdog timer detecting a stalled INT1 stream. */
-  RegularTimerInfo int1_wdt_timer;
+  struct pbl_wallclock_work int1_wdt_timer;
   /** Time of the last FIFO read. */
   uint64_t last_fifo_read_tick;
   /** Expected INT1 period in milliseconds. */
   uint32_t int1_period_ms;
   /** Number of stream recoveries performed. */
   uint32_t num_recoveries;
+  /** Number of INT1 interrupts taken. */
+  uint32_t num_int1_irqs;
   /** Current wake-up (shake) threshold register value. */
   uint8_t wk_ths_curr;
   /** Consecutive watchdog passes with INT1 stuck high in shake-only mode. */

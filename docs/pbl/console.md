@@ -9,14 +9,13 @@ pbl console                       # the emulator, or the lab's watch
 pbl console --tty /dev/ttyACM0    # a watch
 ```
 
-On a watch, the port and baud rate default to those of the
-{doc}`lab's <lab>` watch for the build.
+On a watch, the port defaults to that of the {doc}`lab's <lab>` watch for the
+build, and the baud rate to the build's `CONFIG_CONSOLE_BAUDRATE`.
 
 Send `help` to list the console commands. Firmware log messages are hashed
 at compile time, so the binary only contains a hash and the arguments; the
 console dehashes them on the fly using the dictionary the build generates
-at `build/fw/loghash_dict.json` (`build/prf/fw/loghash_dict.json` for PRF
-builds). {doc}`../development/debugging/index` covers the flash log buffer and
+at `build/log.dict.json`. {doc}`../development/debugging/index` covers the flash log buffer and
 coredumps.
 
 ## Options

@@ -56,10 +56,11 @@ structs that point at their device.
 
 ## Initialization
 
-`pbl_device_init_all()`, called at the top of `init_drivers()` in
-`fw/main.c` once the kernel services drivers rely on are up, walks the device
-table and calls `pbl_device_init()` on each entry. Ordering is by dependency,
-not by table position:
+The kernel calls `pbl_device_init_all()` on the main thread, right before
+`main()`: it walks the device table and calls `pbl_device_init()` on each
+entry. An application therefore starts with its devices ready, and drivers
+may only rely on the kernel in their init. Ordering is by dependency, not by
+table position:
 
 - a device's `parent` is initialized first: the bus a sensor sits on, or the
   multi-function device it is a function of. A parent may also bring its
@@ -77,9 +78,7 @@ their own init. An init returning `-ENODEV` means the device is not present,
 which is not logged as an error. A dependency cycle asserts.
 
 Runtime APIs assert that their device is ready and never initialize on
-demand: bring-up is deterministic and happens in one place. Code that runs
-before `init_drivers()`, such as the boot splash bringing up the display,
-calls `pbl_device_init()` on the devices it uses itself.
+demand: bring-up is deterministic and happens in one place.
 
 Hardware needed before the kernel runs, such as clocks
 (`pbl_soc_early_init()`), stays outside the model, as in Linux.
@@ -107,7 +106,7 @@ PMIC can rely on its cells being up. Cells reach the core with
 Board-level facts live in the board, which instantiates the core and the
 cells it uses: each rail is a `PBL_NPM1300_REGULATOR_DEFINE()` with its
 voltage, mode and whether it is always on; consumers point at the regulator
-(`MicDevice.vdd`) and switch it through its use count, and a PMIC pin is an
+(the `vdd` of a PDM microphone) and switch it through its use count, and a PMIC pin is an
 ordinary `PBL_GPIO(&s_npm1300_gpio.port, ...)`.
 
 ## Reporting to consumers

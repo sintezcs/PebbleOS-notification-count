@@ -7,4 +7,3 @@ config FW_FLASH_SIZE
     default 0x80000 if RECOVERY_FW && !MFG
     # 1 MiB of flash less the 32 KiB bootloader the image is linked past.
     default 0xf8000
-

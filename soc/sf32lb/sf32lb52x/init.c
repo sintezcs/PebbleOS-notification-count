@@ -1,13 +1,15 @@
 /* SPDX-FileCopyrightText: 2025 Core Devices LLC */
 /* SPDX-License-Identifier: Apache-2.0 */
 
+#include "lpsys.h"
 #include "syscfg.h"
 
+#include <pbl/drivers/pinctrl/sf32lb52.h>
+#include <pbl/drivers/pinctrl/sf32lb52_pins.h>
 #include <pbl/kernel/assert.h>
 #include <pbl/kernel/delay.h>
 #include <pbl/kernel/init.h>
 #include <pbl/kernel/mmio.h>
-#include <pbl/kernel/time.h>
 
 #include <bf0_hal.h>
 #include <drivers/watchdog.h>
@@ -16,11 +18,17 @@
 #define HCPU_FREQ_MHZ    240
 #define PWRKEY_RESET_CNT (32000 * 15)
 
+#define PIN_FUNC_MSK \
+  (PBL_PINCTRL_SF32LB52_FSEL_MSK | PBL_PINCTRL_SF32LB52_PULL_UP | PBL_PINCTRL_SF32LB52_INPUT)
+
 void pbl_soc_early_init(void) {
   HAL_StatusTypeDef ret;
   uint32_t bootopt;
 
   SystemInit();
+
+  // Busy waits count cycles, and the bootloader may have left any clock running
+  SystemCoreClock = HAL_RCC_GetHCLKFreq(CORE_ID_HCPU);
 
   // Make the boot ROM power cycle the flash through PA21 on reset: the
   // bootloader leaves it in 4-byte address mode, which the ROM cannot read,
@@ -31,7 +39,7 @@ void pbl_soc_early_init(void) {
   HAL_Set_backup(RTC_BACKUP_BOOTOPT, bootopt);
 
   // Disable default PA21 pull-down, causing leakage
-  HAL_PIN_Set(PAD_PA21, GPIO_A21, PIN_NOPULL, 1);
+  (void)pbl_pinctrl_sf32lb52_modify(SF32LB52_PA21_GPIO | PBL_PINCTRL_SF32LB52_INPUT, PIN_FUNC_MSK);
 
   if (HAL_RCC_HCPU_GetClockSrc(RCC_CLK_MOD_SYS) == RCC_SYSCLK_HRC48) {
     HAL_HPAON_EnableXT48();
@@ -42,7 +50,7 @@ void pbl_soc_early_init(void) {
 
   // Halt LCPU first to avoid LCPU in running state
   HAL_HPAON_WakeCore(CORE_ID_LCPU);
-  HAL_RCC_Reset_and_Halt_LCPU(1);
+  soc_sf32lb52_lpsys_halt(true);
 
   soc_sf32lb52_syscfg_init();
 
@@ -84,14 +92,10 @@ void pbl_soc_early_init(void) {
 
   HAL_RCC_HCPU_ConfigHCLK(HCPU_FREQ_MHZ);
 
-  // Reset sysclk used by HAL_Delay_us
-  HAL_Delay_us(0);
-
   HAL_RCC_Init();
   HAL_PMU_Init();
 
   __HAL_SYSCFG_CLEAR_SECURITY();
-  HAL_EFUSE_Init();
 
   // set Sifli chipset pwrkey reset time to 15s, so it always use PMIC cold reboot for long press
   hwp_pmuc->PWRKEY_CNT = PWRKEY_RESET_CNT;
@@ -99,21 +103,6 @@ void pbl_soc_early_init(void) {
   // Disable 1V8 LDO (feeds PSRAM, we use VDD_SiP to power it)
   hwp_pmuc->PERI_LDO &= ~(PMUC_PERI_LDO_EN_LDO18_Msk | PMUC_PERI_LDO_LDO18_PD_Msk);
   hwp_pmuc->PERI_LDO |= PMUC_PERI_LDO_LDO18_PD_Msk;
-
-  // Set all PSRAM pins as analog (low-power)
-  HAL_PIN_Set_Analog(PAD_SA00, 1);
-  HAL_PIN_Set_Analog(PAD_SA01, 1);
-  HAL_PIN_Set_Analog(PAD_SA02, 1);
-  HAL_PIN_Set_Analog(PAD_SA03, 1);
-  HAL_PIN_Set_Analog(PAD_SA04, 1);
-  HAL_PIN_Set_Analog(PAD_SA05, 1);
-  HAL_PIN_Set_Analog(PAD_SA06, 1);
-  HAL_PIN_Set_Analog(PAD_SA07, 1);
-  HAL_PIN_Set_Analog(PAD_SA08, 1);
-  HAL_PIN_Set_Analog(PAD_SA09, 1);
-  HAL_PIN_Set_Analog(PAD_SA10, 1);
-  HAL_PIN_Set_Analog(PAD_SA11, 1);
-  HAL_PIN_Set_Analog(PAD_SA12, 1);
 
   HAL_HPAON_EnableWakeupSrc(HPAON_WAKEUP_SRC_LP2HP_REQ, AON_PIN_MODE_HIGH);
   HAL_HPAON_EnableWakeupSrc(HPAON_WAKEUP_SRC_LP2HP_IRQ, AON_PIN_MODE_HIGH);
@@ -125,9 +114,4 @@ void pbl_soc_early_init(void) {
   // at 48MHz (div=1). Also, clock needs to be forced ON during deep WFI
   // (FORCE_HP bit in HPSYS_RCC_DBGR register)
   HAL_RCC_HCPU_SetDeepWFIDiv(12, 0, 1);
-}
-
-// HAL timeouts count kernel uptime.
-uint32_t HAL_GetTick(void) {
-  return (uint32_t)pbl_uptime_ms();
 }

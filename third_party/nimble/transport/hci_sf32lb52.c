@@ -9,6 +9,7 @@
 #include <string.h>
 
 #include <pbl/bluetooth/id_addr.h>
+#include <pbl/board.h>
 #include <pbl/drivers/mbox.h>
 #include <pbl/drivers/remoteproc/sf32lb52.h>
 #include <pbl/kernel/assert.h>
@@ -23,7 +24,6 @@
 #include <pbl/util/bits.h>
 #include <pbl/util/math.h>
 
-#include <board/board.h>
 #include <hardware/sf32lb52_memorymap.h>
 #include <kernel/pebble_tasks.h>
 
@@ -88,8 +88,8 @@ static_assert(sizeof(struct ring) == 20U);
 #define RX_RING_BASE      SF32LB52_LPSYS_MBOX_BUF_BASE
 #define RX_RING_POOL_SIZE RING_POOL_SIZE(SF32LB52_MBOX_BUF_SIZE)
 
-static struct pbl_thread *s_hci_task_handle;
-PBL_THREAD_STACK_DEFINE(s_hci_task_stack, 1024);
+static struct pbl_thread s_hci_thread;
+PBL_THREAD_STACK_DEFINE(s_hci_task_stack, CONFIG_BT_HCI_THREAD_STACK_SIZE);
 static PBL_SEM_DEFINE(s_hci_data_ready, 0, 1);
 /* Given by prv_acl_put_signal() whenever an LL-direction ACL mbuf is returned
  * to the transport pool; taken by the HCI RX task when an alloc fails so we
@@ -533,14 +533,14 @@ void ble_transport_ll_init(void) {
   struct pbl_thread_attr attr = {
     .name = "NimbleHCI",
     .entry = prv_hci_task_main,
-    .prio = PBL_PRIO_IDLE + 3,
+    .prio = CONFIG_BT_HCI_THREAD_PRIO,
     .privileged = true,
     .stack = s_hci_task_stack,
     .stack_size = sizeof(s_hci_task_stack),
   };
 
-  s_hci_task_handle = pebble_task_create(PebbleTask_BTHCI, &attr);
-  PBL_ASSERTN(s_hci_task_handle);
+  PBL_ASSERTN(pbl_thread_create(&s_hci_thread, &attr) == 0);
+  pebble_task_register(PebbleTask_BTHCI, &s_hci_thread);
 }
 
 void ble_transport_ll_deinit(void) {
