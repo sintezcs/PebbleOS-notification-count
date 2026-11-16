@@ -5,6 +5,8 @@ osource "soc/*/Kconfig.defconfig"
 # syscfg.yml files; same reason, they have to come before the definitions.
 rsource "subsys/bluetooth/Kconfig.defconfig"
 
+osource "$(DT_BUILD_DIR)/Kconfig.dt"
+
 rsource "soc/Kconfig"
 
 config RELEASE
@@ -13,19 +15,6 @@ config RELEASE
       Whether this is a release build. Pass
       `-DCONFIG_RELEASE=y` to `./waf configure` to enable. Gates
       features that should only run on shipping firmware.
-
-config RECOVERY_FW
-    bool "Recovery firmware (PRF)"
-    help
-      Build the recovery firmware variant. Set via prj_prf.conf when
-      configuring with --variant=prf; do not set manually.
-
-config MFG
-    bool "Manufacturing firmware"
-    help
-      Enable manufacturing-only functionality in the PRF build. PRF
-      and MFG firmwares are mostly the same, so MFG builds also
-      define the recovery-firmware symbols.
 
 config PBLBOOT
     bool "PBLBOOT bootloader"
@@ -86,7 +75,6 @@ config DEBUG_INFO_MACROS
 
 config DEBUGGER_AWARE
     bool "Adapt to an attached debugger"
-    default y if !RELEASE
     depends on ARCH_HAS_DEBUGGER_DETECT
     help
       While a debugger is attached, stop the hardware watchdog and only
@@ -138,6 +126,20 @@ config LINKER_MAP
       of megabytes and costs around a fifth of the link.
 
 endmenu
+
+config BOARD_DISPLAY_CORNERS
+    bool
+    help
+      The board's glass hides the corners of the display, as given by
+      BOARD_DISPLAY_CORNERS in its sources.
+
+config BOARD_PARTITIONS_DT
+    bool
+    default DT_HAS_FIXED_PARTITIONS_ENABLED
+    help
+      The board's flash partitions come from the fixed-partitions node of
+      its devicetree. Boards without a devicetree select one of the layouts
+      below.
 
 config BOARD_PARTITIONS_DUAL_SLOT
     bool
@@ -339,6 +341,22 @@ config FIRMWARE_OFFSET
       Offset of the firmware image within its flash slot, reserving room
       for the image header. Defaulted per SoC in soc/*/Kconfig.defconfig.
 
+choice FIRMWARE_AREA
+    prompt "Firmware flash area to link for"
+    default FIRMWARE_AREA_MAIN
+
+config FIRMWARE_AREA_MAIN
+    bool "Main firmware"
+    help
+      The main firmware area, in the slot FIRMWARE_SLOT selects.
+
+config FIRMWARE_AREA_RECOVERY
+    bool "Recovery firmware"
+    help
+      The recovery firmware area.
+
+endchoice
+
 config FIRMWARE_SLOT
     int "Firmware flash slot to link for"
     range 0 1
@@ -347,12 +365,6 @@ config FIRMWARE_SLOT
       On boards with multiple firmware slots (PBLBOOT), which slot this
       image is linked for. Select with -DCONFIG_FIRMWARE_SLOT=1 at
       configure time.
-
-config RECOVERY_FW_AS_FW
-    bool "Link the recovery firmware into the normal firmware area"
-    help
-      Build PRF linked to the normal firmware flash area instead of its
-      own. Select with -DCONFIG_RECOVERY_FW_AS_FW=y at configure time.
 
 config FW_FLASH_SIZE
     hex
@@ -366,7 +378,7 @@ config SCREEN_COLOR_DEPTH_BITS
     default 8 if PLATFORM_COLOR
     default 1
 
-rsource "lib/c/Kconfig"
+rsource "lib/Kconfig"
 rsource "kernel/Kconfig"
 rsource "subsys/Kconfig"
 rsource "drivers/Kconfig"

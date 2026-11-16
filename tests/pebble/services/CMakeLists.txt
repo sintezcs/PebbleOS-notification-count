@@ -148,7 +148,7 @@ pbl_clar_test(test_als_screen_compensation
   SOURCES
     pebble/services/light/als_screen_compensation_math.c
     pebble/services/light/als_screen_compensation_region.c
-  DEFINES CONFIG_ALS_SCREEN_COMPENSATION CONFIG_AMBIENT_LIGHT_BITS=16
+  DEFINES CONFIG_ALS_SCREEN_COMPENSATION CONFIG_ALS_BITS=16
   OVERRIDES dummy_board
 )
 
@@ -246,6 +246,15 @@ pbl_clar_test(test_speaker_service
 pbl_clar_test(test_transcription
   SOURCES
     pebble/services/voice/transcription.c
+)
+
+pbl_clar_test(test_voice
+  SOURCES
+    pebble/services/voice/transcription.c
+    pebble/services/voice/voice.c
+    tests/fakes/fake_events.c
+  DEFINES CONFIG_MIC
+  OVERRIDES dummy_board
 )
 
 pbl_clar_test(test_voice_endpoint

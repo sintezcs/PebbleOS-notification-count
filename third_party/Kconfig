@@ -3,9 +3,11 @@
 
 menu "Third-party"
 
+rsource "cmsis_core/Kconfig"
 rsource "hal_nordic/Kconfig"
-rsource "hal_sifli/Kconfig"
+if BT
 rsource "nimble/Kconfig"
+endif
 
 config MBEDTLS
     bool "mbedTLS"
@@ -32,6 +34,16 @@ config SPEEX
     help
       Build the Speex audio codec.
 
+config TINYMT
+    bool "TinyMT"
+    help
+      Build the TinyMT pseudo-random number generator.
+
+config UZLIB
+    bool "uzlib"
+    help
+      Build the uzlib deflate decompressor.
+
 config CST816_FW
     bool
     help
@@ -40,9 +52,9 @@ config CST816_FW
 config GH3X2X_ALGO
     bool "Goodix GH3X2X algorithm library"
     depends on HRM_GH3X2X && BOARD_OBELIX
-    default y if !RECOVERY_FW || MFG
+    default y
     help
       Link the Goodix heart rate algorithm library and its driver
-      glue. The plain recovery firmware only needs the sensor driver.
+      glue.
 
 endmenu

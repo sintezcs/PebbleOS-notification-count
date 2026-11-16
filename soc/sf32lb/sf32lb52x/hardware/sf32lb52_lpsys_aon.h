@@ -5,17 +5,20 @@
 
 #include <pbl/util/bits.h>
 
-#include <hardware/sf32lb52_memorymap.h>
-
 /* Register offsets */
 
 #define SF32LB52_LPSYS_AON_PMR_OFFSET      0x0000
+#define SF32LB52_LPSYS_AON_CR1_OFFSET      0x0004
 #define SF32LB52_LPSYS_AON_ACR_OFFSET      0x0010
 #define SF32LB52_LPSYS_AON_SLP_CTRL_OFFSET 0x0040
+#define SF32LB52_LPSYS_AON_SPR_OFFSET      0x0100
+#define SF32LB52_LPSYS_AON_PCR_OFFSET      0x0104
 
 /* Register bit definitions */
 
 #define LPSYS_AON_PMR_CPUWAIT PBL_BIT(2)
+
+#define LPSYS_AON_CR1_GTIM_EN PBL_BIT(31)
 
 #define LPSYS_AON_ACR_HXT48_REQ PBL_BIT(1)
 #define LPSYS_AON_ACR_HXT48_RDY PBL_BIT(31)

@@ -21,10 +21,10 @@ Fetch only needed source/submodules. Rebase the notification API and custom tool
 onto that exact tag, resolving changed source paths and code deliberately. Update
 state's base tag/commit and allocate the private export revision after upstream's
 last revision. Choose a private SDK minor above the upstream minor and any already
-reserved minor. For v4.46.0, upstream contains revisions through 113 and minor 0x6f.
+reserved minor. For v4.47.0, upstream contains revisions through 113 and minor 0x6f.
 The private count remains at revision 114 and SDK minor 0x70, preserving the
 v4.45.0 private ABI. Firmware and storage tests now live under pebble/ and
-tests/pebble/. CI uses the upstream v11 build container. Do not blindly reuse
+tests/pebble/. CI uses the upstream v13 build container. Do not blindly reuse
 these values when upstream changes. Verify the official symbol
 prefix is unchanged and the count API is appended, not inserted in existing ABI.
 

@@ -102,16 +102,26 @@ on top of the board's defconfig (see {doc}`kconfig`):
 | `boards/<board>.conf` | What it enables or tunes on one board |
 | `boards/<board>_<variant>.conf` | The same, for one variant only |
 | `Kconfig` | The application's own options |
+| `roles.yml` | The device of each role, over the board's; see {ref}`devicetree-roles` |
+| `boards/<board>.roles.yml` | The same, on one board |
+| `app.overlay` | Changes to the board's devicetree; see {ref}`devicetree-overlays` |
+| `boards/<board>.overlay` | The same, on one board |
 
 An application with a `Kconfig` makes it the root of the configuration
 tree: it defines its options and sources PebbleOS's with
 `source "Kconfig.pebbleos"`. Defaults it gives before that line take
 precedence over PebbleOS's own.
 
-Subsystems are off unless the application asks for them, e.g.
-`CONFIG_BT=y`. A board's defconfig describes its hardware; what an
-application does with it, such as the firmware's backlight levels on
-`obelix`, goes in the application's `boards/obelix.conf`.
+Driver classes, subsystems and optional kernel features are off unless
+the application asks for them, e.g. `CONFIG_ACCEL=y` or `CONFIG_BT=y`: a
+board's defconfig only selects its SoC, platform, boot chain and console
+UART, so `hello_world` builds little more than the kernel. Even the
+console and logging are the application's choice: `hello_world` enables
+them with `CONFIG_CONSOLE=y` and `CONFIG_LOG=y` in its `prj.conf`. The drivers follow from the board's
+{doc}`devicetree`, and the buses and supplies they use from the drivers.
+What an application does with the hardware, such as the firmware's
+backlight levels on `obelix`, goes in the application's
+`boards/obelix.conf`.
 
 The firmware is built the same way, from `pebble/CMakeLists.txt`, and its
 configuration follows the same layout: `pebble/prj.conf`,

@@ -14,6 +14,12 @@ cmake_minimum_required(VERSION 3.20)
 find_package(PebbleOS REQUIRED HINTS ${CMAKE_CURRENT_SOURCE_DIR}/..)
 project(pebble LANGUAGES C ASM)
 
+# The recovery firmware is selected with -DVARIANT=prf, which loads
+# prj_prf.conf; keep the two spellings in sync.
+if(VARIANT STREQUAL "prf" AND NOT CONFIG_RECOVERY_FW)
+  message(FATAL_ERROR "VARIANT=prf but CONFIG_RECOVERY_FW is not set")
+endif()
+
 include(gettext)
 include(nanopb)
 include(resources)
@@ -69,22 +75,23 @@ foreach(dir ${dirs})
 endforeach()
 
 file(GLOB sources CONFIGURE_DEPENDS *.c)
-if(CONFIG_ARCH_POSIX)
-  pbl_filter_sources(sources EXCLUDE hardfault_handler.c)
-endif()
 target_sources(app PRIVATE ${sources})
 
 if(NOT CONFIG_RECOVERY_FW)
   # One universal catalog, independent of board and enabled services.
   file(GLOB_RECURSE pot_sources CONFIGURE_DEPENDS *.c *.h *.def)
   pbl_firmware_pot(${PROJECT_BINARY_DIR}/pebbleos.pot ${pot_sources}
-    EXCLUDE apps/prf/**)
+    EXCLUDE apps/prf/** apps/samples/** apps/stored/**)
 endif()
 
 # The stored apps are built for the watch, which the recovery firmware runs
 # none on.
 if(NOT CONFIG_RECOVERY_FW AND NOT CONFIG_SOC_POSIX)
-  add_subdirectory(${PBL_BASE}/apps/stored ${CMAKE_BINARY_DIR}/apps/stored)
+  add_subdirectory(apps/stored ${pebble_bin}/apps/stored)
 endif()
 
-pbl_resources()
+if(CONFIG_RECOVERY_FW)
+  pbl_resources(BUILTIN_ONLY)
+else()
+  pbl_resources()
+endif()

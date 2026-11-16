@@ -30,11 +30,23 @@ pbl_clar_test(test_spi_nor
   OVERRIDES dummy_board
 )
 
-pbl_clar_test(test_accel_qemu
+pbl_clar_test(test_accel_sim
   SOURCES
     drivers/base/device.c
     drivers/imu/accel.c
-    drivers/imu/qemu.c
+    drivers/imu/accel_sim.c
+    tests/fakes/fake_rtc.c
+  DEFINES
+    CONFIG_DEVICE_LOG_LEVEL=0
+    PBL_NO_LINKER_SCRIPT
+  OVERRIDES dummy_board
+)
+
+pbl_clar_test(test_mag_sim
+  SOURCES
+    drivers/base/device.c
+    drivers/imu/mag.c
+    drivers/imu/mag_sim.c
     tests/fakes/fake_rtc.c
   DEFINES
     CONFIG_DEVICE_LOG_LEVEL=0
