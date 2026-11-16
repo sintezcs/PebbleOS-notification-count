@@ -4,32 +4,18 @@
 choice
     prompt "SoC"
     help
-      SoC family. Real boards pick a vendor SoC; QEMU boards pick
-      SOC_QEMU and then choose the emulated core.
+      SoC. Real boards pick their SoC line; QEMU boards pick the core of
+      the Pebble QEMU machine.
 
-config SOC_NRF52
-    bool "Nordic nRF52"
-    select HAL_NORDIC
-    select CPU_CORTEX_M4
-    select CPU_HAS_FPU
-
-config SOC_SF32LB52
-    bool "SiFli SF32LB52"
-    select HAL_SIFLI
-    select CPU_STAR_MC1
-    select CPU_HAS_FPU
-    select KERNEL_MPU_IN_FAULTS
-    select RAMFUNC
-    select SOC_HAS_MPU_REGIONS
-    select SOC_HAS_RESET
-
-config SOC_QEMU
-    bool "QEMU emulated"
+rsource "nrf/Kconfig.soc"
+rsource "sf32lb/Kconfig.soc"
+rsource "qemu/Kconfig.soc"
 
 config SOC_POSIX
     bool "POSIX host"
     select ARCH_POSIX
     select SOC_HAS_RESET
+    select TIMER_POSIX
     help
       Run the firmware as a native application on a POSIX host
       (Linux, macOS), with emulated peripherals.
@@ -73,21 +59,10 @@ config SDL
 
 config QEMU
     bool
-    default y if SOC_QEMU
     help
-      Derived alias for SOC_QEMU. Gates features that don't make
+      Derived alias for SOC_QEMU_PEBBLE. Gates features that don't make
       sense under emulation.
 
-choice
-    prompt "Emulated core"
-    depends on SOC_QEMU
-
-config SOC_QEMU_CORTEX_M4
-    bool "Cortex-M4"
-    select CPU_CORTEX_M4
-
-config SOC_QEMU_CORTEX_M33
-    bool "Cortex-M33"
-    select CPU_CORTEX_M33
-
-endchoice
+rsource "nrf/Kconfig"
+rsource "qemu/Kconfig"
+rsource "sf32lb/Kconfig"

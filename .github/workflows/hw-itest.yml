@@ -5,6 +5,7 @@ on:
     - cron: "0 2 * * *"
   pull_request_target:
     types: [labeled]
+  workflow_dispatch:
 
 permissions: {}
 
@@ -43,13 +44,15 @@ jobs:
     needs: authorize
     if: >
       !cancelled() &&
-      (github.event_name == 'schedule' || needs.authorize.result == 'success')
+      (github.event_name == 'schedule' ||
+       github.event_name == 'workflow_dispatch' ||
+       needs.authorize.result == 'success')
     runs-on: ubuntu-24.04
     permissions:
       contents: read
 
     container:
-      image: ghcr.io/coredevices/pebbleos-docker:v11
+      image: ghcr.io/coredevices/pebbleos-docker:v13
 
     strategy:
       fail-fast: false
@@ -112,6 +115,7 @@ jobs:
             build/pebbleos.hex
             build/system_resources.pbpack
             build/log.dict.json
+            build/generated/include/devicetree/partitions.h
             build/normal_*.pbz
 
   test:

@@ -5,8 +5,6 @@
 
 #include <pbl/util/bits.h>
 
-#include <hardware/sf32lb52_memorymap.h>
-
 /* Register offsets */
 
 #define SF32LB52_RTC_TR_OFFSET     0x0000
@@ -14,6 +12,7 @@
 #define SF32LB52_RTC_CR_OFFSET     0x0008
 #define SF32LB52_RTC_ISR_OFFSET    0x000c
 #define SF32LB52_RTC_PSCLR_OFFSET  0x0010
+#define SF32LB52_RTC_BKP_OFFSET(n) (0x0030 + ((n) * 4))
 #define SF32LB52_RTC_PBR_OFFSET(n) (0x005c + ((n) * 4))
 #define SF32LB52_RTC_PAWK1R_OFFSET 0x006c
 #define SF32LB52_RTC_PAWK2R_OFFSET 0x0070
@@ -39,6 +38,7 @@
 #define RTC_DR_CB      PBL_BIT(24)
 #define RTC_DR_ERR     PBL_BIT(31)
 
+#define RTC_CR_LPCKSEL   PBL_BIT(0)
 #define RTC_CR_FMT       PBL_BIT(6)
 #define RTC_CR_POL       PBL_BIT(18)
 #define RTC_CR_OSEL_MASK PBL_GENMASK(20, 19)

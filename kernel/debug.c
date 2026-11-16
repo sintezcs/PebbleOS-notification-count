@@ -56,7 +56,7 @@ void pbl_thread_stack_info(const struct pbl_thread *t, struct pbl_thread_stack_i
 size_t pbl_thread_stats_snapshot(struct pbl_thread_stats *out, size_t max,
                                  uint32_t *total_run_time) {
   size_t n = 0;
-  pbl_irq_lock();
+  unsigned int key = arch_irq_lock();
   if (total_run_time) {
     *total_run_time = pbl_uptime_ticks();
   }
@@ -69,10 +69,10 @@ size_t pbl_thread_stats_snapshot(struct pbl_thread_stats *out, size_t max,
       .number = t->backend.number,
       .run_time = t->backend.run_time,
       .stack_high_water = stack.high_water,
-      .state = (enum pbl_thread_state)t->backend.state,
+      .state = pbl_thread_state(t),
     };
   }
-  pbl_irq_unlock();
+  arch_irq_unlock(key);
   return n;
 }
 

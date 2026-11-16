@@ -5,6 +5,7 @@ menu "Bluetooth"
 
 config BT
     bool "Bluetooth"
+    select BTUTIL
     select MBEDTLS
     select TASK_WDT
     help
@@ -67,7 +68,8 @@ config BT_HCI_NRF52
 
 config BT_HCI_SF32LB52
     bool "SiFli LCPU over IPC"
-    depends on REMOTEPROC_SF32LB52
+    depends on SOC_SF32LB52
+    select REMOTEPROC
     help
       Talk H4 HCI to the SiFli controller running on the LCPU, over the
       byte rings its ROM shares with the HCPU.
@@ -127,6 +129,13 @@ config BT_ID_ADDR
 module = BT
 module-str = Bluetooth
 source "subsys/logging/Kconfig.template.log_level"
+
+config BT_REPEAT_PAIRING_ALWAYS
+    bool "Always accept repeat pairing"
+    help
+      Forget the keys of a bonded peer that pairs again and accept it, even
+      without secure connections and user confirmation. For firmware with
+      no other way to forget a pairing.
 
 config BT_HRM_SERVICE
     bool

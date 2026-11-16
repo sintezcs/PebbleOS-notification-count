@@ -1,14 +1,21 @@
 /* SPDX-FileCopyrightText: 2024 Google LLC */
 /* SPDX-License-Identifier: Apache-2.0 */
 
-#ifdef CONFIG_ACCEL_QEMU
-#include <pbl/drivers/imu/qemu.h>
+#ifdef CONFIG_ACCEL_SIM
+#include <pbl/drivers/imu/sim.h>
 #endif
-#ifdef CONFIG_BATTERY_QEMU
-#include <pbl/drivers/battery/qemu.h>
+#ifdef CONFIG_BATTERY_SIM
+#include <pbl/drivers/battery/sim.h>
+#include <pbl/services/battery/battery_state.h>
+#ifdef CONFIG_QEMU
+#include <comm/qemu/settings.h>
 #endif
-#ifdef CONFIG_AUDIO_HOST_MIC
-#include <pbl/drivers/audio/qemu.h>
+#endif
+#ifdef CONFIG_AUDIO_SIM_MIC
+#include <pbl/drivers/audio/sim.h>
+#endif
+#ifdef CONFIG_VIBE_SIM
+#include <pbl/drivers/vibe/sim.h>
 #endif
 
 #include <pbl/board.h>
@@ -39,26 +46,60 @@ static void prv_uart_rx(const struct pbl_uart *uart, uint8_t byte, void *arg);
 // Our globals
 static QemuSerialGlobals s_qemu_state;
 
+#ifdef CONFIG_ACCEL_SIM
 // -----------------------------------------------------------------------------------------
 // Handle incoming Tap packet data (QemuProtocol_Tap)
 static void prv_tap_msg_callback(const uint8_t *data, uint32_t len) {
   QemuProtocolTapHeader *hdr = (QemuProtocolTapHeader *)data;
-  if (len != sizeof(*hdr)) {
-    PBL_LOG_ERR("Invalid packet length");
+  if (len != sizeof(*hdr) || hdr->axis > AXIS_Z) {
+    PBL_LOG_ERR("Invalid packet");
     return;
   }
 
   PBL_LOG_DBG("Got tap msg: axis: %d, direction: %d", hdr->axis, hdr->direction);
-  PebbleEvent e = {
-    .type = PEBBLE_ACCEL_SHAKE_EVENT,
-    .accel_tap = {
-      .axis = hdr->axis,
-      .direction = hdr->direction,
-    },
+  const struct pbl_accel_event event = {
+    .type = PBL_ACCEL_EVENT_SHAKE,
+    .axis = (IMUCoordinateAxis)hdr->axis,
+    .direction = hdr->direction,
   };
 
-  event_put(&e);
+  pbl_accel_sim_report_event(ACCEL, &event);
 }
+
+// -----------------------------------------------------------------------------------------
+// Handle incoming accel packet data (QemuProtocol_Accel)
+static void prv_accel_msg_callback(const uint8_t *data, uint32_t len) {
+  const QemuProtocolAccelHeader *hdr = (const QemuProtocolAccelHeader *)data;
+  struct pbl_accel_sim_sample samples[16];
+
+  if (len < sizeof(*hdr) || len - sizeof(*hdr) != hdr->num_samples * sizeof(AccelRawData)) {
+    PBL_LOG_ERR("Invalid packet");
+    return;
+  }
+
+  PBL_LOG_VERBOSE("Got accel msg from host: num samples: %d", hdr->num_samples);
+
+  // Live senders stream as they sample, so the latest message replaces what is still queued
+  pbl_accel_sim_flush(ACCEL);
+  for (size_t i = 0U; i < hdr->num_samples; i += ARRAY_LENGTH(samples)) {
+    size_t count = MIN(ARRAY_LENGTH(samples), hdr->num_samples - i);
+
+    for (size_t j = 0U; j < count; j++) {
+      samples[j] = (struct pbl_accel_sim_sample){
+        .x = (int16_t)pbl_be16_to_cpu(hdr->samples[i + j].x),
+        .y = (int16_t)pbl_be16_to_cpu(hdr->samples[i + j].y),
+        .z = (int16_t)pbl_be16_to_cpu(hdr->samples[i + j].z),
+      };
+    }
+    (void)pbl_accel_sim_feed(ACCEL, samples, count);
+  }
+
+  QemuProtocolAccelResponseHeader resp = {
+    .avail_space = pbl_cpu_to_be16(PBL_ACCEL_SIM_QUEUE_SIZE),
+  };
+  qemu_serial_send(QemuProtocol_Accel, (uint8_t *)&resp, sizeof(resp));
+}
+#endif
 
 #ifdef CONFIG_PP_TRANSPORT_QEMU
 // -----------------------------------------------------------------------------------------
@@ -102,6 +143,27 @@ static void prv_compass_msg_callback(const uint8_t *data, uint32_t len) {
 
   event_put(&e);
 }
+
+#ifdef CONFIG_BATTERY_SIM
+// -----------------------------------------------------------------------------------------
+// Handle incoming battery packet data (QemuProtocol_Battery)
+static void prv_battery_msg_callback(const uint8_t *data, uint32_t len) {
+  QemuProtocolBatteryHeader *hdr = (QemuProtocolBatteryHeader *)data;
+  if (len != sizeof(*hdr)) {
+    PBL_LOG_ERR("Invalid packet length");
+    return;
+  }
+
+  PBL_LOG_DBG("Got battery msg: pct: %d, charger_connected:%d", hdr->battery_pct,
+              hdr->charger_connected);
+
+  pbl_battery_sim_set(hdr->battery_pct, hdr->charger_connected != 0);
+
+  // Make the new values take effect immediately
+  battery_state_reset_filter();
+  battery_state_handle_connection_event(hdr->charger_connected != 0);
+}
+#endif
 
 // -----------------------------------------------------------------------------------------
 // Handle incoming time format data (QemuProtocol_TimeFormat)
@@ -223,6 +285,15 @@ static void prv_heart_rate_msg_callback(const uint8_t *data, uint32_t len) {
 #endif
 }
 
+#ifdef CONFIG_AUDIO_SIM_MIC
+// -----------------------------------------------------------------------------------------
+// Handle incoming microphone audio (QemuProtocol_MicAudio)
+static void prv_mic_msg_callback(const uint8_t *data, uint32_t len) {
+  // The host sends little-endian PCM, the byte order of every supported target
+  pbl_audio_sim_mic_write(MIC, data, len / sizeof(int16_t));
+}
+#endif
+
 // -----------------------------------------------------------------------------------------
 // List of incoming message handlers
 static const QemuMessageHandler s_qemu_endpoints[] = {
@@ -230,24 +301,26 @@ static const QemuMessageHandler s_qemu_endpoints[] = {
 #ifdef CONFIG_PP_TRANSPORT_QEMU
   {QemuProtocol_SPP, pbl_pp_qemu_receive},
 #endif
+#ifdef CONFIG_ACCEL_SIM
   {QemuProtocol_Tap, prv_tap_msg_callback},
+#endif
 #ifdef CONFIG_PP_TRANSPORT_QEMU
   {QemuProtocol_BluetoothConnection, prv_bluetooth_connection_msg_callback},
 #endif
   {QemuProtocol_Compass, prv_compass_msg_callback},
-#ifdef CONFIG_BATTERY_QEMU
-  {QemuProtocol_Battery, qemu_battery_msg_callback},
+#ifdef CONFIG_BATTERY_SIM
+  {QemuProtocol_Battery, prv_battery_msg_callback},
 #endif
-#ifdef CONFIG_ACCEL_QEMU
-  {QemuProtocol_Accel, qemu_accel_msg_callback},
+#ifdef CONFIG_ACCEL_SIM
+  {QemuProtocol_Accel, prv_accel_msg_callback},
 #endif
   {QemuProtocol_TimeFormat, prv_time_format_msg_callback},
   {QemuProtocol_TimelinePeek, prv_timeline_peek_msg_callback},
   {QemuProtocol_ContentSize, prv_content_size_msg_callback},
   {QemuProtocol_HealthMetric, prv_health_metric_msg_callback},
   {QemuProtocol_HeartRate, prv_heart_rate_msg_callback},
-#ifdef CONFIG_AUDIO_HOST_MIC
-  {QemuProtocol_MicAudio, qemu_mic_msg_callback},
+#ifdef CONFIG_AUDIO_SIM_MIC
+  {QemuProtocol_MicAudio, prv_mic_msg_callback},
 #endif
   // Button messages are handled by QEMU directly
 };
@@ -269,6 +342,25 @@ static const QemuMessageHandler *prv_find_handler(uint16_t protocol_id) {
   return nullptr;
 }
 
+#ifdef CONFIG_VIBE_SIM
+static bool s_vibe_on;
+
+static void prv_vibe_observer(const struct pbl_vibe *vibe, int8_t strength, void *arg) {
+  bool on = (strength != 0);
+
+  if (on == s_vibe_on) {
+    return;
+  }
+
+  s_vibe_on = on;
+
+  QemuProtocolVibrationNotificationHeader notification = {
+    .on = on ? 1 : 0,
+  };
+  qemu_serial_send(QemuProtocol_Vibration, (const uint8_t *)&notification, sizeof(notification));
+}
+#endif
+
 // -----------------------------------------------------------------------------------------
 void qemu_serial_init(void) {
   // Init our state variables
@@ -278,6 +370,14 @@ void qemu_serial_init(void) {
 
   (void)pbl_uart_configure(QEMU_UART, &cfg);
   (void)pbl_uart_rx_enable(QEMU_UART, prv_uart_rx, nullptr);
+
+#if defined(CONFIG_BATTERY_SIM) && defined(CONFIG_QEMU)
+  pbl_battery_sim_set(pbl_battery_sim_get_percent(),
+                      qemu_setting_get(QemuSetting_DefaultPluggedIn) != 0);
+#endif
+#ifdef CONFIG_VIBE_SIM
+  pbl_vibe_sim_set_observer(VIBE, prv_vibe_observer, nullptr);
+#endif
 }
 
 // -----------------------------------------------------------------------------------------

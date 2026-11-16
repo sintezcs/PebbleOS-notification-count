@@ -283,15 +283,14 @@ void kernel_pbl_log_from_fault_handler(const char *src_filename, uint16_t src_li
   prv_dispatch(&msg, true);
 }
 
-void kernel_pbl_log_from_fault_handler_fmt(const char *src_filename, uint16_t src_line_number,
-                                           char *buffer, unsigned int buffer_size, const char *fmt,
-                                           ...) {
+void pbl_log_fault(const char *src_filename, int src_line_number, const char *fmt, ...) {
+  char buffer[96];
   va_list ap;
   va_start(ap, fmt);
-  vsniprintf(buffer, buffer_size, fmt, ap);
+  vsniprintf(buffer, sizeof(buffer), fmt, ap);
   va_end(ap);
 
-  kernel_pbl_log_from_fault_handler(src_filename, src_line_number, buffer);
+  kernel_pbl_log_from_fault_handler(src_filename, (uint16_t)src_line_number, buffer);
 }
 
 #ifdef CONFIG_SHELL

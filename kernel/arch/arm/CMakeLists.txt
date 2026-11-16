@@ -3,8 +3,8 @@
 
 pbl_library_sources(
   arch.c
-  cache.c
   debug.c
+  fault.c
   fpu.c
   interrupts.c
   irq.c
@@ -12,6 +12,8 @@ pbl_library_sources(
   vector_table.c
 )
 pbl_library_sources_ifdef(CONFIG_COREDUMP coredump.c)
+pbl_library_sources_ifdef(CONFIG_CPU_HAS_DCACHE dcache.c)
+pbl_library_sources_ifdef(CONFIG_CPU_HAS_ICACHE icache.c)
 pbl_library_sources_ifdef(CONFIG_USERSPACE syscall.c)
 pbl_library_sources_ifdef(CONFIG_ARMV7_M mpu_armv7m.c)
 pbl_library_sources_ifdef(CONFIG_ARMV8_M_MAINLINE mpu_armv8m.c)

@@ -421,6 +421,9 @@ static const char *prv_precip_chance(WeatherType t) {
   }
 }
 
+// Below this rain chance the day reads as dry: "Chance of rain" at 5% is noise.
+#define PRECIP_CHANCE_MIN_PCT 20
+
 // "Chance of X"/"X likely" are only news when X is NOT already the headline — a
 // light-rain day announcing "Chance of rain" reads like the paper didn't look outside.
 static bool prv_precip_is_the_headline(WeatherType t) {
@@ -489,7 +492,7 @@ static void prv_build_alert(const WeatherLocationForecast *f, char *buf, size_t 
     alert = pbl_i18n_noop("High humidity");
   } else if (!prv_precip_is_the_headline(t) && f->today_precip_mm >= 60) {
     alert = prv_precip_likely(t);
-  } else if (!prv_precip_is_the_headline(t) && f->today_precip_mm > 0) {
+  } else if (!prv_precip_is_the_headline(t) && f->today_precip_mm >= PRECIP_CHANCE_MIN_PCT) {
     alert = prv_precip_chance(t);
   } else if (f->today_wind_mph >= 20) {
     alert = pbl_i18n_noop("Windy");
@@ -834,7 +837,8 @@ static const AnimationImplementation s_fin_anim_impl = {
 };
 
 // ---- Text animation snapshot helpers ----
-// Featured temperature: current temp, or the daily high on future days.
+// Featured temperature: the current-hour temp (same as the mainscreen header and the
+// clock), or the daily high on future days.
 static void prv_fill_featured_temp_buffer(const WeatherLocationForecast *f, char *buffer,
                                           size_t buffer_size) {
   if (f->current_temp == WEATHER_SERVICE_LOCATION_FORECAST_UNKNOWN_TEMP) {
@@ -843,7 +847,7 @@ static void prv_fill_featured_temp_buffer(const WeatherLocationForecast *f, char
     else
       snprintf(buffer, buffer_size, "--\xC2\xB0");
   } else {
-    snprintf(buffer, buffer_size, "%d\xC2\xB0", f->current_temp);
+    snprintf(buffer, buffer_size, "%d\xC2\xB0", f->current_temp_now);
   }
 }
 

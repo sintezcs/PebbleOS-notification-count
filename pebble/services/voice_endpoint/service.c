@@ -143,6 +143,14 @@ static void prv_handle_nlp_result(VoiceSessionResultMsg *msg, size_t size) {
   voice_handle_nlp_result(msg->result, msg->session_id, reminder_str, timestamp);
   pbl_free(reminder_str);
 }
+
+static void prv_handle_service_retry(ServiceRetryMsg *msg) {
+  if (msg->service >= VoiceEndpointServiceCount) {
+    PBL_LOG_WRN("Unknown service %u in service retry message", (unsigned)msg->service);
+    return;
+  }
+  voice_handle_service_retry(msg->session_id, msg->service);
+}
 #endif
 
 #ifdef CONFIG_MIC
@@ -198,6 +206,15 @@ void voice_endpoint_protocol_msg_callback(struct pbl_pp_session *session, const 
       }
       break;
     }
+    case MsgIdServiceRetry: {
+      if (size >= sizeof(ServiceRetryMsg)) {
+        ServiceRetryMsg *msg = (ServiceRetryMsg *)data;
+        prv_handle_service_retry(msg);
+      } else {
+        PBL_LOG_WRN("Invalid size for service retry message %zu", size);
+      }
+      break;
+    }
     default:
       // Ignore invalid message ID
       PBL_LOG_WRN("Invalid message ID");
@@ -233,10 +250,14 @@ void voice_endpoint_setup_session(VoiceEndpointSessionType session_type,
     .attr_list.num_attributes = 1,
   };
 
+  // Set the flags after struct initialization because the rest of the fields in the bitfield are
+  // left uninitialized if just one is set.
+  if (session_type == VoiceEndpointSessionTypeDictation) {
+    msg->flags.service_retry_support = 1;
+  }
+
   struct pbl_generic_attr *attr = msg->attr_list.attributes;
   if (app_uuid) {
-    // set this after struct initialization because the rest of the fields in the bitfield are left
-    // uninitialized if just one is set.
     msg->flags.app_initiated = 1;
 
     // we're also sending the app UUID
